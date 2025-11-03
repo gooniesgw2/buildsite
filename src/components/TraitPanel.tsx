@@ -131,58 +131,73 @@ function TraitSelector({ specId, selectedChoices, onTraitSelect }: TraitSelector
     return tierTraits.sort((a, b) => a.order - b.order);
   });
 
-  return (
-    <div className="space-y-3">
-      {/* Each tier as a row */}
-      {traitsByTier.map((tierTraits, tierIndex) => (
-        <div key={tierIndex} className="space-y-2">
-          <div className="text-xs text-gray-400 font-medium px-1">
-            Tier {tierIndex + 1}
-          </div>
-          <div className="space-y-2">
-            {tierTraits.map((trait) => {
-              const isSelected = selectedChoices[tierIndex] === trait.id;
-              return (
-                <button
-                  key={trait.id}
-                  onClick={() => onTraitSelect(tierIndex as 0 | 1 | 2, trait.id)}
-                  className={`
-                    w-full flex items-start gap-3 p-2 rounded border-2 transition-all text-left
-                    ${isSelected
-                      ? 'border-yellow-400 bg-yellow-400/20'
-                      : 'border-gray-600 bg-gray-700/50 hover:border-gray-500 hover:bg-gray-700'
-                    }
-                  `}
-                >
-                  {/* Trait Icon */}
-                  <div className="relative flex-shrink-0">
-                    <div className="w-12 h-12 rounded overflow-hidden bg-gray-800">
-                      <img
-                        src={trait.icon}
-                        alt={trait.name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    {isSelected && (
-                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-400 rounded-full flex items-center justify-center">
-                        <span className="text-xs text-black font-bold">✓</span>
-                      </div>
-                    )}
-                  </div>
+  // Reorganize into rows (by position/order) instead of columns (by tier)
+  const traitRows = [0, 1, 2].map(position => {
+    return traitsByTier.map(tierTraits => tierTraits[position]).filter(Boolean);
+  });
 
-                  {/* Trait Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className={`font-semibold text-sm ${isSelected ? 'text-yellow-400' : 'text-gray-200'}`}>
-                      {trait.name}
-                    </div>
-                    <div className="text-xs text-gray-400 mt-0.5">
-                      {trait.description}
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
+  const TIER_LABELS = ['Adept', 'Master', 'Grandmaster'];
+
+  return (
+    <div className="space-y-2">
+      {/* Header row */}
+      <div className="grid grid-cols-3 gap-2 mb-1">
+        {TIER_LABELS.map((label, idx) => (
+          <div key={idx} className="text-xs text-gray-400 font-medium text-center">
+            {label}
           </div>
+        ))}
+      </div>
+
+      {/* Each position (top/mid/bot) as a row */}
+      {traitRows.map((rowTraits, rowIndex) => (
+        <div key={rowIndex} className="grid grid-cols-3 gap-2">
+          {rowTraits.map((trait, colIndex) => {
+            if (!trait) return <div key={colIndex} />;
+
+            const tierIndex = colIndex; // tier 0, 1, 2 maps to array index
+            const isSelected = selectedChoices[tierIndex] === trait.id;
+
+            return (
+              <button
+                key={trait.id}
+                onClick={() => onTraitSelect(tierIndex as 0 | 1 | 2, trait.id)}
+                className={`
+                  flex items-start gap-2 p-2 rounded border-2 transition-all text-left
+                  ${isSelected
+                    ? 'border-yellow-400 bg-yellow-400/20'
+                    : 'border-gray-600 bg-gray-700/50 hover:border-gray-500 hover:bg-gray-700'
+                  }
+                `}
+              >
+                {/* Trait Icon */}
+                <div className="relative flex-shrink-0">
+                  <div className="w-10 h-10 rounded overflow-hidden bg-gray-800">
+                    <img
+                      src={trait.icon}
+                      alt={trait.name}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  {isSelected && (
+                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full flex items-center justify-center">
+                      <span className="text-xs text-black font-bold leading-none">✓</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Trait Info */}
+                <div className="flex-1 min-w-0">
+                  <div className={`font-semibold text-xs ${isSelected ? 'text-yellow-400' : 'text-gray-200'}`}>
+                    {trait.name}
+                  </div>
+                  <div className="text-xs text-gray-400 mt-0.5 line-clamp-2">
+                    {trait.description}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
         </div>
       ))}
     </div>
