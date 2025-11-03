@@ -563,7 +563,14 @@ function EquipmentPanelContent() {
                 ))}
               </select>
               {selectedRune && (
-                <Tooltip title={selectedRune.name} content={selectedRune.description || ''} icon={selectedRune.icon}>
+                <Tooltip
+                  title={selectedRune.name}
+                  content={selectedRune.description || ''}
+                  icon={selectedRune.icon}
+                  bonuses={selectedRune.details?.bonuses}
+                  rarity={selectedRune.rarity}
+                  itemType={selectedRune.details?.type || 'Upgrade Component'}
+                >
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-yellow-400 bg-slate-900">
                     <img src={selectedRune.icon} alt={selectedRune.name} className="h-6 w-6 rounded" />
                   </div>
@@ -590,7 +597,14 @@ function EquipmentPanelContent() {
                 ))}
               </select>
               {selectedRelic && (
-                <Tooltip title={selectedRelic.name} content={selectedRelic.description || ''} icon={selectedRelic.icon}>
+                <Tooltip
+                  title={selectedRelic.name}
+                  content={selectedRelic.description || ''}
+                  icon={selectedRelic.icon}
+                  bonuses={selectedRelic.details?.bonuses}
+                  rarity={selectedRelic.rarity}
+                  itemType="Relic"
+                >
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-yellow-400 bg-slate-900">
                     <img src={selectedRelic.icon} alt={selectedRelic.name} className="h-6 w-6 rounded" />
                   </div>

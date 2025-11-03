@@ -1,0 +1,20 @@
+Fetching all item IDs...
+Total items: 71141
+Searching through 356 batches for matching names...
+Processed 10/356 batches... (0/68 runes, 0/100 relics found)
+Processed 20/356 batches... (0/68 runes, 0/100 relics found)
+Processed 30/356 batches... (0/68 runes, 0/100 relics found)
+Processed 40/356 batches... (0/68 runes, 0/100 relics found)
+Processed 50/356 batches... (0/68 runes, 0/100 relics found)
+Processed 60/356 batches... (0/68 runes, 0/100 relics found)
+Processed 70/356 batches... (0/68 runes, 0/100 relics found)
+Processed 80/356 batches... (0/68 runes, 0/100 relics found)
+Processed 90/356 batches... (42/68 runes, 0/100 relics found)
+Processed 100/356 batches... (42/68 runes, 0/100 relics found)
+Processed 110/356 batches... (42/68 runes, 0/100 relics found)
+Processed 120/356 batches... (42/68 runes, 0/100 relics found)
+Processed 130/356 batches... (42/68 runes, 0/100 relics found)
+Processed 140/356 batches... (43/68 runes, 0/100 relics found)
+Processed 150/356 batches... (43/68 runes, 0/100 relics found)
+Processed 160/356 batches... (43/68 runes, 0/100 relics found)
+Processed 170/356 batches... (46/68 runes, 0/100 relics found)

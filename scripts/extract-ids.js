@@ -204,6 +204,11 @@ async function lookupIds() {
       const items = await response.json();
 
       items.forEach(item => {
+        // Skip recipe items (they're consumables that unlock crafting recipes)
+        if (item.type === 'Consumable' && item.details?.type === 'UnlockRecipe') {
+          return;
+        }
+
         if (runeNameSet.has(item.name)) {
           foundRunes.push(item);
         } else if (relicNameSet.has(item.name)) {

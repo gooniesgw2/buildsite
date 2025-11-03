@@ -6,9 +6,12 @@ interface TooltipProps {
   title: string;
   icon?: string;
   children: React.ReactNode;
+  bonuses?: string[]; // For runes/relics - array of bonus strings like "(1): +25 Power"
+  rarity?: string; // Item rarity (e.g., "Exotic")
+  itemType?: string; // Item type (e.g., "Upgrade Component", "Relic")
 }
 
-export default function Tooltip({ content, title, icon, children }: TooltipProps) {
+export default function Tooltip({ content, title, icon, children, bonuses, rarity, itemType }: TooltipProps) {
   const [isVisible, setIsVisible] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const triggerRef = useRef<HTMLDivElement>(null);
@@ -58,16 +61,35 @@ export default function Tooltip({ content, title, icon, children }: TooltipProps
             left: `${position.left}px`,
           }}
         >
-          <div className="flex items-start gap-2">
+          <div className="flex items-start gap-3">
             {icon && (
-              <img src={icon} alt="" className="w-12 h-12 rounded flex-shrink-0" />
+              <img src={icon} alt="" className="w-14 h-14 rounded flex-shrink-0 border border-gray-700" />
             )}
-            <div className="flex-1">
-              <div className="font-semibold text-yellow-400 mb-1">{title}</div>
-              <div
-                className="text-sm text-gray-300 leading-relaxed"
-                dangerouslySetInnerHTML={{ __html: parseGW2Text(content) }}
-              />
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-orange-400 text-base mb-1">{title}</div>
+
+              {rarity && itemType && (
+                <div className="text-xs text-purple-400 mb-2">
+                  {rarity} {itemType}
+                </div>
+              )}
+
+              {bonuses && bonuses.length > 0 && (
+                <div className="space-y-0.5 mb-2 text-xs">
+                  {bonuses.map((bonus, index) => (
+                    <div key={index} className="text-blue-300"
+                      dangerouslySetInnerHTML={{ __html: parseGW2Text(bonus) }}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {content && (
+                <div
+                  className="text-sm text-gray-300 leading-relaxed mt-2 pt-2 border-t border-gray-700"
+                  dangerouslySetInnerHTML={{ __html: parseGW2Text(content) }}
+                />
+              )}
             </div>
           </div>
         </div>
