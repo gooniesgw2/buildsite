@@ -19,18 +19,19 @@ export default function Tooltip({ content, title, icon, children }: TooltipProps
       const triggerRect = triggerRef.current.getBoundingClientRect();
       const tooltipRect = tooltipRef.current.getBoundingClientRect();
 
-      let top = triggerRect.bottom + window.scrollY + 8;
-      let left = triggerRect.left + window.scrollX + (triggerRect.width / 2) - (tooltipRect.width / 2);
+      // Position below the trigger by default
+      let top = triggerRect.bottom + 8;
+      let left = triggerRect.left + (triggerRect.width / 2) - (tooltipRect.width / 2);
 
-      // Keep tooltip on screen
+      // Keep tooltip on screen horizontally
       if (left < 8) left = 8;
       if (left + tooltipRect.width > window.innerWidth - 8) {
         left = window.innerWidth - tooltipRect.width - 8;
       }
 
       // If tooltip would go off bottom, show above instead
-      if (top + tooltipRect.height > window.innerHeight + window.scrollY) {
-        top = triggerRect.top + window.scrollY - tooltipRect.height - 8;
+      if (top + tooltipRect.height > window.innerHeight) {
+        top = triggerRect.top - tooltipRect.height - 8;
       }
 
       setPosition({ top, left });

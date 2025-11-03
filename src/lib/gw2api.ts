@@ -65,6 +65,11 @@ class GW2ApiClient {
     this.loadFromLocalStorage();
   }
 
+  // Fetch a single skill by ID
+  async getSkill(id: number): Promise<GW2Skill> {
+    return await this.fetchWithCache<GW2Skill>(`/skills/${id}`);
+  }
+
   // Fetch all skills for a profession
   async getSkills(profession?: string): Promise<GW2Skill[]> {
     const allSkillIds = await this.fetchWithCache<number[]>('/skills');
@@ -87,6 +92,11 @@ class GW2ApiClient {
       );
     }
     return skills;
+  }
+
+  // Fetch a single trait by ID
+  async getTrait(id: number): Promise<GW2Trait> {
+    return await this.fetchWithCache<GW2Trait>(`/traits/${id}`);
   }
 
   // Fetch traits for a specialization

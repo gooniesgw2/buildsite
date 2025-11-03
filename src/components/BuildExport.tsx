@@ -8,7 +8,7 @@ export default function BuildExport() {
   const [copied, setCopied] = useState<string | null>(null);
   const [discordMarkdown, setDiscordMarkdown] = useState<string>('');
   const [showMarkdown, setShowMarkdown] = useState(false);
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
 
   const handleCopyUrl = () => {
     const url = getShareableUrl(buildData);
