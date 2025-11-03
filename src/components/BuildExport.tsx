@@ -42,8 +42,8 @@ export default function BuildExport() {
   };
 
   return (
-    <div className="bg-gray-800 rounded-lg p-6">
-      <h2 className="text-xl font-semibold mb-4">Share Build</h2>
+    <div className="bg-gray-800 rounded-lg p-4">
+      <h2 className="text-lg font-semibold mb-3">Share Build</h2>
 
       <div className="space-y-4">
         {/* Share URL */}

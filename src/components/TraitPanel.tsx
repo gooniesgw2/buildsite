@@ -74,8 +74,8 @@ export default function TraitPanel() {
   };
 
   return (
-    <div className="bg-gray-800 rounded-lg p-6">
-      <h2 className="text-xl font-semibold mb-4">Specializations & Traits</h2>
+    <div className="bg-gray-800 rounded-lg p-4">
+      <h2 className="text-lg font-semibold mb-3">Specializations & Traits</h2>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {renderSpecSlot(1)}
         {renderSpecSlot(2)}
@@ -95,6 +95,7 @@ function TraitSelector({ specId, selectedChoices, onTraitSelect }: TraitSelector
   const [traits, setTraits] = useState<GW2Trait[]>([]);
   const [spec, setSpec] = useState<GW2Specialization | null>(null);
   const [loading, setLoading] = useState(true);
+  const [hoveredTrait, setHoveredTrait] = useState<GW2Trait | null>(null);
 
   useEffect(() => {
     loadTraits();
@@ -123,37 +124,74 @@ function TraitSelector({ specId, selectedChoices, onTraitSelect }: TraitSelector
   if (!spec) return null;
 
   const majorTraits = traits.filter(t => spec.major_traits.includes(t.id));
-  const traitsByTier = [
-    majorTraits.filter(t => t.tier === 1),
-    majorTraits.filter(t => t.tier === 2),
-    majorTraits.filter(t => t.tier === 3),
-  ];
+
+  // Group by tier, then sort by order within each tier
+  const traitsByTier = [1, 2, 3].map(tier => {
+    const tierTraits = majorTraits.filter(t => t.tier === tier);
+    // Sort by order: 0=top, 1=mid, 2=bot
+    return tierTraits.sort((a, b) => a.order - b.order);
+  });
+
+  const POSITION_LABELS = ['Top', 'Mid', 'Bot'];
 
   return (
-    <div className="space-y-3">
-      {traitsByTier.map((tierTraits, tierIndex) => (
-        <div key={tierIndex} className="border-l-4 border-blue-500 pl-3">
-          <div className="text-xs text-gray-400 mb-1">Tier {tierIndex + 1}</div>
-          <div className="space-y-1">
-            {tierTraits.map(trait => (
-              <button
-                key={trait.id}
-                onClick={() => onTraitSelect(tierIndex as 0 | 1 | 2, trait.id)}
-                className={`
-                  w-full text-left px-3 py-2 rounded text-sm transition-colors
-                  ${selectedChoices[tierIndex] === trait.id
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-600 text-gray-200 hover:bg-gray-500'
-                  }
-                `}
-                title={trait.description}
-              >
-                {trait.name}
-              </button>
-            ))}
+    <div className="space-y-2">
+      {/* Tier columns displayed horizontally */}
+      <div className="grid grid-cols-3 gap-3">
+        {traitsByTier.map((tierTraits, tierIndex) => (
+          <div key={tierIndex} className="space-y-2">
+            <div className="text-xs text-center text-gray-400 font-medium">
+              Tier {tierIndex + 1}
+            </div>
+            <div className="space-y-2">
+              {tierTraits.map((trait, posIndex) => {
+                const isSelected = selectedChoices[tierIndex] === trait.id;
+                return (
+                  <div key={trait.id} className="relative">
+                    <button
+                      onClick={() => onTraitSelect(tierIndex as 0 | 1 | 2, trait.id)}
+                      onMouseEnter={() => setHoveredTrait(trait)}
+                      onMouseLeave={() => setHoveredTrait(null)}
+                      className={`
+                        w-full aspect-square rounded border-2 transition-all
+                        ${isSelected
+                          ? 'border-yellow-400 bg-yellow-400/20 shadow-lg shadow-yellow-400/50'
+                          : 'border-gray-600 bg-gray-700 hover:border-gray-400'
+                        }
+                      `}
+                      title={`${POSITION_LABELS[posIndex]}: ${trait.name}`}
+                    >
+                      <img
+                        src={trait.icon}
+                        alt={trait.name}
+                        className="w-full h-full object-cover rounded"
+                      />
+                    </button>
+                    {isSelected && (
+                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-400 rounded-full flex items-center justify-center">
+                        <span className="text-xs text-black font-bold">✓</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Tooltip on hover */}
+      {hoveredTrait && (
+        <div className="mt-3 p-3 bg-gray-900 rounded border border-gray-600">
+          <div className="flex items-start gap-2">
+            <img src={hoveredTrait.icon} alt="" className="w-10 h-10 rounded" />
+            <div className="flex-1">
+              <div className="font-semibold text-yellow-400">{hoveredTrait.name}</div>
+              <div className="text-sm text-gray-300 mt-1">{hoveredTrait.description}</div>
+            </div>
           </div>
         </div>
-      ))}
+      )}
     </div>
   );
 }
