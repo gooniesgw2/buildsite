@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useBuildStore } from '../store/buildStore';
 import { gw2Api } from '../lib/gw2api';
 import type { GW2Specialization, GW2Trait } from '../types/gw2';
+import Tooltip from './Tooltip';
+import { stripGW2Markup } from '../lib/textParser';
 
 export default function TraitPanel() {
   const { profession, traits, setSpecialization, setTrait } = useBuildStore();
@@ -159,43 +161,49 @@ function TraitSelector({ specId, selectedChoices, onTraitSelect }: TraitSelector
             const isSelected = selectedChoices[tierIndex] === trait.id;
 
             return (
-              <button
+              <Tooltip
                 key={trait.id}
-                onClick={() => onTraitSelect(tierIndex as 0 | 1 | 2, trait.id)}
-                className={`
-                  flex items-start gap-1.5 p-1.5 rounded border-2 transition-all text-left
-                  ${isSelected
-                    ? 'border-yellow-400 bg-yellow-400/20'
-                    : 'border-gray-600 bg-gray-700/50 hover:border-gray-500 hover:bg-gray-700'
-                  }
-                `}
+                title={trait.name}
+                content={trait.description}
+                icon={trait.icon}
               >
-                {/* Trait Icon */}
-                <div className="relative flex-shrink-0">
-                  <div className="w-8 h-8 rounded overflow-hidden bg-gray-800">
-                    <img
-                      src={trait.icon}
-                      alt={trait.name}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  {isSelected && (
-                    <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-yellow-400 rounded-full flex items-center justify-center">
-                      <span className="text-xs text-black font-bold leading-none">✓</span>
+                <button
+                  onClick={() => onTraitSelect(tierIndex as 0 | 1 | 2, trait.id)}
+                  className={`
+                    w-full flex items-start gap-1.5 p-1.5 rounded border-2 transition-all text-left
+                    ${isSelected
+                      ? 'border-yellow-400 bg-yellow-400/20'
+                      : 'border-gray-600 bg-gray-700/50 hover:border-gray-500 hover:bg-gray-700'
+                    }
+                  `}
+                >
+                  {/* Trait Icon */}
+                  <div className="relative flex-shrink-0">
+                    <div className="w-8 h-8 rounded overflow-hidden bg-gray-800">
+                      <img
+                        src={trait.icon}
+                        alt={trait.name}
+                        className="w-full h-full object-cover"
+                      />
                     </div>
-                  )}
-                </div>
+                    {isSelected && (
+                      <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-yellow-400 rounded-full flex items-center justify-center">
+                        <span className="text-xs text-black font-bold leading-none">✓</span>
+                      </div>
+                    )}
+                  </div>
 
-                {/* Trait Info */}
-                <div className="flex-1 min-w-0">
-                  <div className={`font-semibold text-xs leading-tight ${isSelected ? 'text-yellow-400' : 'text-gray-200'}`}>
-                    {trait.name}
+                  {/* Trait Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className={`font-semibold text-xs leading-tight ${isSelected ? 'text-yellow-400' : 'text-gray-200'}`}>
+                      {trait.name}
+                    </div>
+                    <div className="text-xs text-gray-400 mt-0.5 line-clamp-2 leading-tight">
+                      {stripGW2Markup(trait.description)}
+                    </div>
                   </div>
-                  <div className="text-xs text-gray-400 mt-0.5 line-clamp-2 leading-tight">
-                    {trait.description}
-                  </div>
-                </div>
-              </button>
+                </button>
+              </Tooltip>
             );
           })}
         </div>

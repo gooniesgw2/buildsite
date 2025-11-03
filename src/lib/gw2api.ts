@@ -80,7 +80,11 @@ class GW2ApiClient {
     }
 
     if (profession) {
-      return skills.filter(s => s.professions.includes(profession));
+      // Case-insensitive profession filter
+      const profLower = profession.toLowerCase();
+      return skills.filter(s =>
+        s.professions && s.professions.some(p => p.toLowerCase() === profLower)
+      );
     }
     return skills;
   }
