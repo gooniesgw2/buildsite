@@ -24,14 +24,44 @@ export const STAT_COMBOS = [
 
 export type StatCombo = typeof STAT_COMBOS[number];
 
-// Infusion types
+// Infusion types (+5 to stat)
 export const INFUSIONS = [
-  'Mighty', 'Precise', 'Malign', 'Healing', 'Vital', 'Resilient',
-  'Mighty +9 Agony', 'Precise +9 Agony', 'Malign +9 Agony',
-  'Healing +9 Agony', 'Vital +9 Agony', 'Resilient +9 Agony'
+  'Mighty', 'Precise', 'Malign', 'Expertise', 'Resilient', 'Vital', 'Healing', 'Concentration'
 ] as const;
 
 export type InfusionType = typeof INFUSIONS[number];
+
+// Popular rune item IDs (Superior versions)
+export const RUNE_IDS = [
+  24836, // Scholar
+  24723, // Eagle
+  67339, // Dragonhunter
+  24818, // Strength
+  24848, // Nightmare
+  83338, // Trapper
+  24800, // Durability
+  24842, // Monk
+  24762, // Water
+  70600, // Leadership
+  24765, // Elementalist
+  24687, // Ranger
+] as const;
+
+// Popular relic item IDs
+export const RELIC_IDS = [
+  100916, // Thief
+  100942, // Reaper
+  100047, // Aristocracy
+  100153, // Fractal
+  100611, // Akeem
+  101500, // Cerus
+  100733, // Febe
+  100611, // Dragonhunter
+  100819, // Firebrand
+  100713, // Fireworks
+  100922, // Zojja
+  100770, // Isgarren
+] as const;
 
 // API Response Types
 export interface GW2Skill {
@@ -98,6 +128,28 @@ export interface GW2ItemStat {
   };
 }
 
+export interface GW2Item {
+  id: number;
+  name: string;
+  description?: string;
+  type: string;
+  level: number;
+  rarity: string;
+  vendor_value: number;
+  icon: string;
+  details?: {
+    type?: string;
+    bonuses?: string[];
+    infix_upgrade?: {
+      id: number;
+      attributes: Array<{
+        attribute: string;
+        modifier: number;
+      }>;
+    };
+  };
+}
+
 // Build data structure
 export interface Equipment {
   slot: ArmorSlot | WeaponSlot | TrinketSlot;
@@ -131,5 +183,6 @@ export interface BuildData {
   equipment: Equipment[];
   skills: SkillSelection;
   traits: TraitSelection;
-  relic?: string;
+  runeId?: number; // Item ID of the rune
+  relicId?: number; // Item ID of the relic
 }

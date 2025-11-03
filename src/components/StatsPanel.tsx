@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useBuildStore } from '../store/buildStore';
-import type { StatCombo } from '../types/gw2';
+import type { StatCombo, InfusionType } from '../types/gw2';
 
 type AttributeKey =
   | 'Power'
@@ -23,6 +23,18 @@ const BASE_ATTRIBUTES: Record<AttributeKey, number> = {
   HealingPower: 0,
   Expertise: 0,
   BoonDuration: 0,
+};
+
+// Infusions give +5 to a stat
+const INFUSION_BONUSES: Record<InfusionType, Partial<Record<AttributeKey, number>>> = {
+  Mighty: { Power: 5 },
+  Precise: { Precision: 5 },
+  Malign: { ConditionDamage: 5 },
+  Expertise: { Expertise: 5 },
+  Resilient: { Toughness: 5 },
+  Vital: { Vitality: 5 },
+  Healing: { HealingPower: 5 },
+  Concentration: { BoonDuration: 5 },
 };
 
 const STAT_ATTRIBUTE_MAP: Record<StatCombo, Partial<Record<AttributeKey, number>>> = {
@@ -86,13 +98,25 @@ export default function StatsPanel() {
 
   const totals = useMemo(() => {
     return equipment.reduce<Record<AttributeKey, number>>((acc, item) => {
+      // Add stat combo contributions
       const contributions = STAT_ATTRIBUTE_MAP[item.stat as StatCombo];
-      if (!contributions) return acc;
+      if (contributions) {
+        Object.entries(contributions).forEach(([key, value]) => {
+          const attribute = key as AttributeKey;
+          acc[attribute] += value ?? 0;
+        });
+      }
 
-      Object.entries(contributions).forEach(([key, value]) => {
-        const attribute = key as AttributeKey;
-        acc[attribute] += value ?? 0;
-      });
+      // Add infusion contributions
+      if (item.infusion1) {
+        const infusionBonus = INFUSION_BONUSES[item.infusion1];
+        if (infusionBonus) {
+          Object.entries(infusionBonus).forEach(([key, value]) => {
+            const attribute = key as AttributeKey;
+            acc[attribute] += value ?? 0;
+          });
+        }
+      }
 
       return acc;
     }, { ...BASE_ATTRIBUTES });
@@ -100,6 +124,28 @@ export default function StatsPanel() {
 
   const maxValue = useMemo(() => {
     return ATTRIBUTES.reduce((max, attribute) => Math.max(max, totals[attribute.key]), 0);
+  }, [totals]);
+
+  // Derived stats calculations
+  const derivedStats = useMemo(() => {
+    // Critical Chance (%) = 5 + [(Precision - 1000) / 21]
+    const critChance = 5 + (totals.Precision - 1000) / 21;
+
+    // Critical Damage (%) = 150 + (Ferocity / 15)
+    const critDamage = 150 + totals.Ferocity / 15;
+
+    // Condition Duration (%) = Expertise / 15
+    const conditionDuration = totals.Expertise / 15;
+
+    // Boon Duration (%) = Concentration / 15
+    const boonDuration = totals.BoonDuration / 15;
+
+    return {
+      critChance: Math.min(100, Math.max(0, critChance)),
+      critDamage: Math.max(150, critDamage),
+      conditionDuration: Math.min(100, Math.max(0, conditionDuration)),
+      boonDuration: Math.min(100, Math.max(0, boonDuration)),
+    };
   }, [totals]);
 
   return (
@@ -134,6 +180,29 @@ export default function StatsPanel() {
             </div>
           );
         })}
+      </div>
+
+      {/* Derived Stats Section */}
+      <div className="mt-6 border-t border-slate-800/60 pt-6">
+        <h3 className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Derived Stats</h3>
+        <div className="mt-4 space-y-3">
+          <div className="flex items-center justify-between text-sm">
+            <span className="font-medium text-slate-200">Critical Chance</span>
+            <span className="font-semibold text-white">{derivedStats.critChance.toFixed(1)}%</span>
+          </div>
+          <div className="flex items-center justify-between text-sm">
+            <span className="font-medium text-slate-200">Critical Damage</span>
+            <span className="font-semibold text-white">{derivedStats.critDamage.toFixed(1)}%</span>
+          </div>
+          <div className="flex items-center justify-between text-sm">
+            <span className="font-medium text-slate-200">Condition Duration</span>
+            <span className="font-semibold text-white">{derivedStats.conditionDuration.toFixed(1)}%</span>
+          </div>
+          <div className="flex items-center justify-between text-sm">
+            <span className="font-medium text-slate-200">Boon Duration</span>
+            <span className="font-semibold text-white">{derivedStats.boonDuration.toFixed(1)}%</span>
+          </div>
+        </div>
       </div>
     </aside>
   );

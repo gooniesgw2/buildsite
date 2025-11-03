@@ -11,7 +11,8 @@ interface BuildStore extends BuildData {
   setSkill: (slot: keyof BuildData['skills'], skillId: number) => void;
   setSpecialization: (specSlot: 1 | 2 | 3, specId: number) => void;
   setTrait: (specSlot: 1 | 2 | 3, tier: 0 | 1 | 2, traitId: number | null) => void;
-  setRelic: (relic: string) => void;
+  setRuneId: (runeId: number | undefined) => void;
+  setRelicId: (relicId: number | undefined) => void;
   resetBuild: () => void;
 }
 
@@ -140,7 +141,9 @@ export const useBuildStore = create<BuildStore>((set) => ({
       };
     }),
 
-  setRelic: (relic) => set({ relic }),
+  setRuneId: (runeId) => set({ runeId }),
+
+  setRelicId: (relicId) => set({ relicId }),
 
   resetBuild: () => set(initialBuild),
 }));

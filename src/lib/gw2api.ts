@@ -1,4 +1,4 @@
-import type { GW2Skill, GW2Trait, GW2Specialization, GW2ItemStat } from '../types/gw2';
+import type { GW2Skill, GW2Trait, GW2Specialization, GW2ItemStat, GW2Item } from '../types/gw2';
 
 const API_BASE = 'https://api.guildwars2.com/v2';
 const CACHE_DURATION = 1000 * 60 * 60 * 24; // 24 hours
@@ -133,6 +133,17 @@ class GW2ApiClient {
     return await this.fetchWithCache<GW2ItemStat[]>(
       `/itemstats?ids=${allStatIds.join(',')}`
     );
+  }
+
+  // Fetch items (runes, relics) by IDs
+  async getItems(itemIds: readonly number[]): Promise<GW2Item[]> {
+    const idsString = itemIds.join(',');
+    return await this.fetchWithCache<GW2Item[]>(`/items?ids=${idsString}`);
+  }
+
+  // Fetch a single item by ID
+  async getItem(itemId: number): Promise<GW2Item> {
+    return await this.fetchWithCache<GW2Item>(`/items/${itemId}`);
   }
 
   // Clear cache
