@@ -1,15 +1,144 @@
 import pako from 'pako';
 import type { BuildData } from '../types/gw2';
 
+// Profession enum (3 bits, 0-8)
+const PROFESSIONS = ['Guardian', 'Warrior', 'Engineer', 'Ranger', 'Thief', 'Elementalist', 'Mesmer', 'Necromancer', 'Revenant'];
+// Game mode enum (2 bits, 0-2)
+const GAME_MODES = ['PvE', 'PvP', 'WvW'];
+// Equipment slots (4 bits, 0-15)
+const SLOTS = ['Helm', 'Shoulders', 'Coat', 'Gloves', 'Leggings', 'Boots', 'Amulet', 'Ring1', 'Ring2', 'Accessory1', 'Accessory2', 'Back', 'MainHand1', 'OffHand1', 'MainHand2', 'OffHand2'];
+
 /**
- * Encode build data to a URL-safe base64 string
+ * Convert Uint8Array to base64 string efficiently
+ */
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const len = bytes.byteLength;
+  const chunkSize = 8192;
+  for (let i = 0; i < len; i += chunkSize) {
+    const chunk = bytes.subarray(i, Math.min(i + chunkSize, len));
+    binary += String.fromCharCode.apply(null, Array.from(chunk));
+  }
+  return btoa(binary);
+}
+
+/**
+ * Write variable-length integer (uses fewer bytes for smaller numbers)
+ */
+function writeVarInt(arr: number[], value: number) {
+  if (value === 0 || value === undefined || value === null) {
+    arr.push(0);
+    return;
+  }
+  while (value > 0) {
+    let byte = value & 0x7F;
+    value >>>= 7;
+    if (value > 0) byte |= 0x80;
+    arr.push(byte);
+  }
+}
+
+/**
+ * Read variable-length integer
+ */
+function readVarInt(bytes: Uint8Array, offset: { value: number }): number {
+  let result = 0;
+  let shift = 0;
+  while (true) {
+    const byte = bytes[offset.value++];
+    result |= (byte & 0x7F) << shift;
+    if ((byte & 0x80) === 0) break;
+    shift += 7;
+  }
+  return result;
+}
+
+/**
+ * Write string as length-prefixed UTF-8
+ */
+function writeString(arr: number[], str: string) {
+  if (!str) {
+    arr.push(0);
+    return;
+  }
+  const bytes = new TextEncoder().encode(str);
+  writeVarInt(arr, bytes.length);
+  arr.push(...bytes);
+}
+
+/**
+ * Read length-prefixed UTF-8 string
+ */
+function readString(bytes: Uint8Array, offset: { value: number }): string {
+  const len = readVarInt(bytes, offset);
+  if (len === 0) return '';
+  const str = new TextDecoder().decode(bytes.slice(offset.value, offset.value + len));
+  offset.value += len;
+  return str;
+}
+
+/**
+ * Encode build data to a compact binary format
  */
 export function encodeBuild(build: BuildData): string {
   try {
-    const json = JSON.stringify(build);
-    const compressed = pako.deflate(json);
-    const base64 = btoa(String.fromCharCode(...compressed));
-    // Make URL-safe
+    const bytes: number[] = [];
+
+    // Version byte for future compatibility
+    bytes.push(2);
+
+    // Profession (3 bits) + GameMode (2 bits) = 1 byte
+    const profIdx = PROFESSIONS.indexOf(build.profession);
+    const modeIdx = GAME_MODES.indexOf(build.gameMode);
+    bytes.push((profIdx << 2) | modeIdx);
+
+    // Equipment count
+    bytes.push(build.equipment.length);
+    for (const eq of build.equipment) {
+      const slotIdx = SLOTS.indexOf(eq.slot);
+      bytes.push(slotIdx);
+      writeString(bytes, eq.stat);
+      writeString(bytes, eq.weaponType || '');
+      writeString(bytes, eq.upgrade || '');
+      writeVarInt(bytes, eq.sigil1Id || 0);
+      writeVarInt(bytes, eq.sigil2Id || 0);
+      writeString(bytes, eq.infusion1 || '');
+      writeString(bytes, eq.infusion2 || '');
+      writeString(bytes, eq.infusion3 || '');
+    }
+
+    // Skills - write as array of IDs
+    const skillSlots = ['heal', 'utility1', 'utility2', 'utility3', 'elite'] as const;
+    for (const slot of skillSlots) {
+      writeVarInt(bytes, build.skills[slot] || 0);
+    }
+
+    // Traits
+    writeVarInt(bytes, build.traits.spec1 || 0);
+    const spec1Choices = build.traits.spec1Choices || [null, null, null];
+    for (const choice of spec1Choices) {
+      writeVarInt(bytes, choice || 0);
+    }
+
+    writeVarInt(bytes, build.traits.spec2 || 0);
+    const spec2Choices = build.traits.spec2Choices || [null, null, null];
+    for (const choice of spec2Choices) {
+      writeVarInt(bytes, choice || 0);
+    }
+
+    writeVarInt(bytes, build.traits.spec3 || 0);
+    const spec3Choices = build.traits.spec3Choices || [null, null, null];
+    for (const choice of spec3Choices) {
+      writeVarInt(bytes, choice || 0);
+    }
+
+    // Rune and Relic
+    writeVarInt(bytes, build.runeId || 0);
+    writeVarInt(bytes, build.relicId || 0);
+
+    const binary = new Uint8Array(bytes);
+    const compressed = pako.deflate(binary, { level: 9 });
+    const base64 = uint8ArrayToBase64(compressed);
     return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
   } catch (error) {
     console.error('Failed to encode build:', error);
@@ -33,8 +162,119 @@ export function decodeBuild(encoded: string): BuildData {
       bytes[i] = binary.charCodeAt(i);
     }
 
-    const decompressed = pako.inflate(bytes, { to: 'string' });
-    return JSON.parse(decompressed);
+    const decompressed = pako.inflate(bytes);
+
+    // Check version byte
+    if (decompressed[0] === 2) {
+      // New binary format (version 2)
+      const offset = { value: 1 };
+
+      // Read profession + game mode
+      const packed = decompressed[offset.value++];
+      const profIdx = (packed >> 2) & 0x07;
+      const modeIdx = packed & 0x03;
+
+      const build: BuildData = {
+        profession: PROFESSIONS[profIdx] as any,
+        gameMode: GAME_MODES[modeIdx] as any,
+        equipment: [],
+        skills: {},
+        traits: {},
+      };
+
+      // Read equipment
+      const eqCount = decompressed[offset.value++];
+      for (let i = 0; i < eqCount; i++) {
+        const slotIdx = decompressed[offset.value++];
+        const stat = readString(decompressed, offset);
+        const weaponType = readString(decompressed, offset);
+        const upgrade = readString(decompressed, offset);
+        const sigil1Id = readVarInt(decompressed, offset);
+        const sigil2Id = readVarInt(decompressed, offset);
+        const infusion1 = readString(decompressed, offset);
+        const infusion2 = readString(decompressed, offset);
+        const infusion3 = readString(decompressed, offset);
+
+        build.equipment.push({
+          slot: SLOTS[slotIdx] as any,
+          stat: stat as any,
+          ...(weaponType && { weaponType: weaponType as any }),
+          ...(upgrade && { upgrade }),
+          ...(sigil1Id && { sigil1Id }),
+          ...(sigil2Id && { sigil2Id }),
+          ...(infusion1 && { infusion1 }),
+          ...(infusion2 && { infusion2 }),
+          ...(infusion3 && { infusion3 }),
+        } as any);
+      }
+
+      // Read skills
+      const skillSlots = ['heal', 'utility1', 'utility2', 'utility3', 'elite'] as const;
+      for (const slot of skillSlots) {
+        const id = readVarInt(decompressed, offset);
+        if (id) build.skills[slot] = id;
+      }
+
+      // Read traits
+      build.traits.spec1 = readVarInt(decompressed, offset) || undefined;
+      build.traits.spec1Choices = [
+        readVarInt(decompressed, offset) || null,
+        readVarInt(decompressed, offset) || null,
+        readVarInt(decompressed, offset) || null,
+      ];
+
+      build.traits.spec2 = readVarInt(decompressed, offset) || undefined;
+      build.traits.spec2Choices = [
+        readVarInt(decompressed, offset) || null,
+        readVarInt(decompressed, offset) || null,
+        readVarInt(decompressed, offset) || null,
+      ];
+
+      build.traits.spec3 = readVarInt(decompressed, offset) || undefined;
+      build.traits.spec3Choices = [
+        readVarInt(decompressed, offset) || null,
+        readVarInt(decompressed, offset) || null,
+        readVarInt(decompressed, offset) || null,
+      ];
+
+      // Read rune and relic
+      const runeId = readVarInt(decompressed, offset);
+      const relicId = readVarInt(decompressed, offset);
+      if (runeId) build.runeId = runeId;
+      if (relicId) build.relicId = relicId;
+
+      return build;
+    } else {
+      // Old JSON format (version 1 or legacy)
+      const decompressedStr = pako.inflate(bytes, { to: 'string' });
+      const parsed = JSON.parse(decompressedStr);
+
+      // Check if it's the compact JSON format (version 1)
+      if (parsed.p !== undefined) {
+        return {
+          profession: parsed.p,
+          gameMode: parsed.g,
+          equipment: parsed.e.map((eq: any) => ({
+            slot: eq.s,
+            stat: eq.st,
+            ...(eq.w && { weaponType: eq.w }),
+            ...(eq.u && { upgrade: eq.u }),
+            ...(eq.s1 && { sigil1Id: eq.s1 }),
+            ...(eq.s2 && { sigil2Id: eq.s2 }),
+            ...(eq.i1 && { infusion1: eq.i1 }),
+            ...(eq.i2 && { infusion2: eq.i2 }),
+            ...(eq.i3 && { infusion3: eq.i3 }),
+          })),
+          skills: parsed.sk,
+          traits: parsed.t,
+          ...(parsed.r && { runeId: parsed.r }),
+          ...(parsed.rl && { relicId: parsed.rl }),
+        };
+      }
+
+      // Legacy full JSON format
+      return parsed;
+    }
   } catch (error) {
     console.error('Failed to decode build:', error);
     throw error;
