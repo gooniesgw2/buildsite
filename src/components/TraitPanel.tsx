@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useBuildStore } from '../store/buildStore';
 import { gw2Api } from '../lib/gw2api';
-import type { GW2Specialization, GW2Trait } from '../types/gw2';
+import type { GW2Specialization, GW2TraitWithModes, GameMode } from '../types/gw2';
 import Tooltip from './Tooltip';
 import { stripGW2Markup } from '../lib/textParser';
+import { resolveTraitMode } from '../lib/modeUtils';
 
 export default function TraitPanel() {
-  const { profession, traits, setSpecialization, setTrait } = useBuildStore();
+  const { profession, traits, setSpecialization, setTrait, gameMode } = useBuildStore();
   const [specs, setSpecs] = useState<GW2Specialization[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(true);
@@ -72,6 +73,7 @@ export default function TraitPanel() {
             <TraitSelector
               specId={selectedSpecId}
               selectedChoices={selectedChoices}
+              gameMode={gameMode}
               onTraitSelect={(tier, traitId) => setTrait(slotNum, tier, traitId)}
             />
           </div>
@@ -138,11 +140,12 @@ export default function TraitPanel() {
 interface TraitSelectorProps {
   specId: number;
   selectedChoices: [number | null, number | null, number | null];
+  gameMode?: GameMode;
   onTraitSelect: (tier: 0 | 1 | 2, traitId: number | null) => void;
 }
 
-function TraitSelector({ specId, selectedChoices, onTraitSelect }: TraitSelectorProps) {
-  const [traits, setTraits] = useState<GW2Trait[]>([]);
+function TraitSelector({ specId, selectedChoices, gameMode, onTraitSelect }: TraitSelectorProps) {
+  const [traits, setTraits] = useState<GW2TraitWithModes[]>([]);
   const [spec, setSpec] = useState<GW2Specialization | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -205,9 +208,17 @@ function TraitSelector({ specId, selectedChoices, onTraitSelect }: TraitSelector
 
             const tierIndex = colIndex;
             const isSelected = selectedChoices[tierIndex] === trait.id;
+            const traitDetails = resolveTraitMode(trait, gameMode);
 
             return (
-              <Tooltip key={trait.id} title={trait.name} content={trait.description} icon={trait.icon}>
+              <Tooltip
+                key={trait.id}
+                title={trait.name}
+                content={traitDetails?.description || ''}
+                icon={trait.icon}
+                facts={traitDetails?.facts}
+                modeData={trait.modes}
+              >
                 <button
                   onClick={() => onTraitSelect(tierIndex as 0 | 1 | 2, trait.id)}
                   className={`flex w-full items-start gap-2 rounded-2xl border-2 px-2 py-2 text-left transition ${
@@ -232,7 +243,7 @@ function TraitSelector({ specId, selectedChoices, onTraitSelect }: TraitSelector
                       {trait.name}
                     </div>
                     <div className="mt-1 text-[11px] leading-snug text-slate-400">
-                      {stripGW2Markup(trait.description)}
+                      {stripGW2Markup(traitDetails?.description || '')}
                     </div>
                   </div>
                 </button>

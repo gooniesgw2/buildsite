@@ -41,6 +41,15 @@ export const BASE_ARMOR: Record<WeightClass, number> = {
 // Game mode types
 export type GameMode = 'PvE' | 'PvP' | 'WvW';
 
+export type ModeKey = 'default' | 'pve' | 'pvp' | 'wvw';
+
+export interface ModeBundle<T> {
+  default: T;
+  pve?: T;
+  pvp?: T;
+  wvw?: T;
+}
+
 // Equipment slot types
 export type ArmorSlot = 'Helm' | 'Shoulders' | 'Coat' | 'Gloves' | 'Leggings' | 'Boots';
 export type WeaponSlot = 'MainHand1' | 'OffHand1' | 'MainHand2' | 'OffHand2';
@@ -387,6 +396,37 @@ export const SIGIL_IDS = [
   84505, // Severance
 ] as const;
 
+export interface GW2Fact {
+  text?: string;
+  type: string;
+  value?: number;
+  icon?: string;
+  duration?: number;
+  hit_count?: number;
+  apply_count?: number;
+  requires_trait?: number;
+  requires_buff?: number;
+  distance?: number;
+  number?: number;
+  percent?: number;
+  time?: number;
+  [key: string]: unknown;
+}
+
+export interface GW2SkillModeData {
+  description?: string;
+  facts?: GW2Fact[];
+  traited_facts?: GW2Fact[];
+  [key: string]: unknown;
+}
+
+export interface GW2TraitModeData {
+  description?: string;
+  facts?: GW2Fact[];
+  traited_facts?: GW2Fact[];
+  [key: string]: unknown;
+}
+
 // API Response Types
 export interface GW2Skill {
   id: number;
@@ -397,14 +437,36 @@ export interface GW2Skill {
   weapon_type?: string;
   professions: string[];
   slot?: string;
-  facts?: Array<{
-    text?: string;
-    type: string;
-    value?: number;
-    icon?: string;
-  }>;
+  facts?: GW2Fact[];
+  traited_facts?: GW2Fact[];
   categories?: string[];
   specialization?: number;
+  flags?: string[];
+  dual_wield?: string;
+  flip_skill?: number;
+  transform_skill?: number;
+  bundle_skill?: number;
+  next_chain?: number;
+  prev_chain?: number;
+  chain?: string;
+  toolbelt_skill?: number;
+  skill_id?: number;
+  attunement?: string;
+  cost?: number;
+  initiative?: number;
+  swap?: string;
+  sequence?: string;
+  ammo?: number;
+  ammo_count?: number;
+  subskills?: Array<{ id: number; attunement?: string | null }>; // Glyphs, tomes, etc.
+  pve?: GW2SkillModeData;
+  pvp?: GW2SkillModeData;
+  wvw?: GW2SkillModeData;
+}
+
+export interface GW2SkillWithModes
+  extends Omit<GW2Skill, 'description' | 'facts' | 'traited_facts' | 'pve' | 'pvp' | 'wvw'> {
+  modes: ModeBundle<GW2SkillModeData>;
 }
 
 export interface GW2Trait {
@@ -415,12 +477,16 @@ export interface GW2Trait {
   description: string;
   icon: string;
   specialization: number;
-  facts?: Array<{
-    text?: string;
-    type: string;
-    value?: number;
-    icon?: string;
-  }>;
+  facts?: GW2Fact[];
+  traited_facts?: GW2Fact[];
+  pve?: GW2TraitModeData;
+  pvp?: GW2TraitModeData;
+  wvw?: GW2TraitModeData;
+}
+
+export interface GW2TraitWithModes
+  extends Omit<GW2Trait, 'description' | 'facts' | 'traited_facts' | 'pve' | 'pvp' | 'wvw'> {
+  modes: ModeBundle<GW2TraitModeData>;
 }
 
 export interface GW2Specialization {

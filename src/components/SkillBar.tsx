@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useBuildStore } from '../store/buildStore';
 import { gw2Api } from '../lib/gw2api';
-import type { GW2Skill } from '../types/gw2';
+import type { GW2SkillWithModes } from '../types/gw2';
+import { resolveSkillMode } from '../lib/modeUtils';
 import Tooltip from './Tooltip';
 
 type SkillSlot = 'heal' | 'utility1' | 'utility2' | 'utility3' | 'elite';
@@ -15,10 +16,11 @@ const SLOT_LABELS: Record<SkillSlot, string> = {
 };
 
 export default function SkillBar() {
-  const { profession, skills, setSkill } = useBuildStore();
-  const [availableSkills, setAvailableSkills] = useState<GW2Skill[]>([]);
+  const { profession, skills, setSkill, gameMode } = useBuildStore();
+  const [availableSkills, setAvailableSkills] = useState<GW2SkillWithModes[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(true);
+
 
   useEffect(() => {
     loadSkills();
@@ -36,7 +38,7 @@ export default function SkillBar() {
     }
   };
 
-  const getSkillsForSlot = (slotType: string): GW2Skill[] => {
+  const getSkillsForSlot = (slotType: string): GW2SkillWithModes[] => {
     return availableSkills.filter((skill) => skill.slot?.toLowerCase() === slotType.toLowerCase());
   };
 
@@ -45,6 +47,7 @@ export default function SkillBar() {
     const skillsForSlot = getSkillsForSlot(slotType);
     const selectedSkillId = skills[slot];
     const selectedSkill = availableSkills.find((skill) => skill.id === selectedSkillId);
+    const selectedSkillDetails = selectedSkill ? resolveSkillMode(selectedSkill, gameMode) : undefined;
 
     return (
       <div
@@ -54,7 +57,13 @@ export default function SkillBar() {
         <div className="flex flex-col items-center gap-1">
           <span className="text-[10px] uppercase tracking-[0.3em] text-slate-500">{SLOT_LABELS[slot]}</span>
           {selectedSkill ? (
-            <Tooltip title={selectedSkill.name} content={selectedSkill.description || ''} icon={selectedSkill.icon}>
+            <Tooltip
+              title={selectedSkill.name}
+              content={selectedSkillDetails?.description || ''}
+              icon={selectedSkill.icon}
+              facts={selectedSkillDetails?.facts}
+              modeData={selectedSkill.modes}
+            >
               <div
                 className={`relative flex h-14 w-14 items-center justify-center rounded-xl border cursor-pointer border-yellow-400 bg-slate-900 hover:border-yellow-300`}
               >

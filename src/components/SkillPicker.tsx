@@ -1,16 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
-import type { GW2Skill } from '../types/gw2';
+import type { GameMode, GW2SkillWithModes } from '../types/gw2';
+import { resolveSkillMode } from '../lib/modeUtils';
 import Tooltip from './Tooltip';
 
 interface SkillPickerProps {
-  skills: GW2Skill[];
+  skills: GW2SkillWithModes[];
   selectedSkillId: number | undefined;
   onSelect: (skillId: number) => void;
   slotLabel: string;
-  selectedSkill: GW2Skill | undefined;
+  selectedSkill: GW2SkillWithModes | undefined;
+  gameMode?: GameMode;
 }
 
-export default function SkillPicker({ skills, selectedSkillId, onSelect, slotLabel, selectedSkill }: SkillPickerProps) {
+export default function SkillPicker({ skills, selectedSkillId, onSelect, slotLabel, selectedSkill, gameMode }: SkillPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -49,6 +51,8 @@ export default function SkillPicker({ skills, selectedSkillId, onSelect, slotLab
     setIsOpen(false);
   };
 
+  const selectedDetails = selectedSkill ? resolveSkillMode(selectedSkill, gameMode) : undefined;
+
   return (
     <div className="relative flex-1 min-w-0">
       {/* Skill Icon Button */}
@@ -62,7 +66,13 @@ export default function SkillPicker({ skills, selectedSkillId, onSelect, slotLab
         }`}
       >
         {selectedSkill ? (
-          <img src={selectedSkill.icon} alt={selectedSkill.name} className="h-14 w-14 rounded-lg object-cover" />
+          <Tooltip
+            title={selectedSkill.name}
+            content={selectedDetails?.description || ''}
+            icon={selectedSkill.icon}
+          >
+            <img src={selectedSkill.icon} alt={selectedSkill.name} className="h-14 w-14 rounded-lg object-cover" />
+          </Tooltip>
         ) : (
           <span className="text-[10px] text-slate-500">Empty</span>
         )}
@@ -84,8 +94,9 @@ export default function SkillPicker({ skills, selectedSkillId, onSelect, slotLab
             <div className="grid grid-cols-5 gap-2">
               {Array.from(new Map(skills.map(s => [s.id, s])).values()).map((skill) => {
                 const isSelected = skill.id === selectedSkillId;
+                const modeDetails = resolveSkillMode(skill, gameMode);
                 return (
-                  <Tooltip key={skill.id} title={skill.name} content={skill.description || ''} icon={skill.icon}>
+                  <Tooltip key={skill.id} title={skill.name} content={modeDetails?.description || ''} icon={skill.icon}>
                     <button
                       onClick={() => handleSelect(skill.id)}
                       className={`group relative flex flex-col items-center gap-1 rounded-xl border-2 p-2 transition ${

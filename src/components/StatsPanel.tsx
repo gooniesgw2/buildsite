@@ -2,7 +2,8 @@ import { useMemo, useState, useEffect } from 'react';
 import { useBuildStore } from '../store/buildStore';
 import { gw2Api } from '../lib/gw2api';
 import type { StatCombo, InfusionType, GW2Item } from '../types/gw2';
-import { BASE_HEALTH, PROFESSION_WEIGHT_CLASS, BASE_ARMOR } from '../types/gw2';
+import { BASE_HEALTH, PROFESSION_WEIGHT_CLASS, BASE_ARMOR, TWO_HANDED_WEAPONS } from '../types/gw2';
+import { ASCENDED_ARMOR_STATS, ASCENDED_TRINKET_STATS, ASCENDED_WEAPON_STATS, type SlotStatValues } from '../lib/statTables';
 
 type AttributeKey =
   | 'Power'
@@ -81,34 +82,6 @@ const STAT_COMBOS: Record<StatCombo, AttributeKey[]> = {
   Wanderer: ['Power', 'Vitality', 'Toughness', 'BoonDuration'],
 };
 
-// Stat multipliers per slot (based on GW2 ascended gear)
-// For 3-stat: [major, minor, minor]
-// For 4-stat: [major, major, minor, minor]
-const SLOT_MULTIPLIERS: Record<string, number[]> = {
-  // Armor
-  'Helm': [0.47, 0.47, 0.26, 0.26],
-  'Shoulders': [0.35, 0.35, 0.19, 0.19],
-  'Coat': [1.05, 1.05, 0.58, 0.58],
-  'Gloves': [0.35, 0.35, 0.19, 0.19],
-  'Leggings': [0.70, 0.70, 0.39, 0.39],
-  'Boots': [0.35, 0.35, 0.19, 0.19],
-  // Trinkets
-  'Backpack': [1.16, 1.16, 0.62, 0.62],
-  'Accessory1': [0.80, 0.80, 0.43, 0.43],
-  'Accessory2': [0.80, 0.80, 0.43, 0.43],
-  'Amulet': [1.16, 1.16, 0.62, 0.62],
-  'Ring1': [0.93, 0.93, 0.49, 0.49],
-  'Ring2': [0.93, 0.93, 0.49, 0.49],
-  // Weapons - treating as 2H for now (staff/greatsword/etc)
-  // TODO: detect 1H vs 2H weapons properly
-  'MainHand1': [1.87, 1.87, 1.03, 1.03],
-  'OffHand1': [0.52, 0.52, 0.31, 0.31],
-  'MainHand2': [1.87, 1.87, 1.03, 1.03],
-  'OffHand2': [0.52, 0.52, 0.31, 0.31],
-};
-
-const BASE_STAT_VALUE = 115; // Base major stat value for armor
-
 const ATTRIBUTES: Array<{
   key: AttributeKey;
   label: string;
@@ -135,9 +108,18 @@ const STAT_NAME_MAP: Record<string, AttributeKey> = {
   'Vitality': 'Vitality',
   'Ferocity': 'Ferocity',
   'Condition Damage': 'ConditionDamage',
+  'Condition Duration': 'Expertise',
   'Healing Power': 'HealingPower',
   'Expertise': 'Expertise',
   'Concentration': 'BoonDuration',
+  'Boon Duration': 'BoonDuration',
+  'Critical Damage': 'Ferocity',
+};
+
+const PERCENT_TO_ATTRIBUTE: Partial<Record<AttributeKey, number>> = {
+  Expertise: 15,
+  BoonDuration: 15,
+  Ferocity: 15,
 };
 
 // Parse rune bonus strings like "+25 Power", "+10% Boon Duration"
@@ -169,74 +151,86 @@ export default function StatsPanel() {
   }, [runeId]);
 
   const totals = useMemo(() => {
-    const acc = equipment.reduce<Record<AttributeKey, number>>((acc, item) => {
-      // Only count weapon set 1 (not both weapon sets)
+    const armorStats = ASCENDED_ARMOR_STATS as Record<string, SlotStatValues>;
+    const trinketStats = ASCENDED_TRINKET_STATS as Record<string, SlotStatValues>;
+    const totals = { ...BASE_ATTRIBUTES } as Record<AttributeKey, number>;
+    const equipmentBySlot = equipment.reduce<Record<string, typeof equipment[number]>>((acc, item) => {
+      acc[item.slot] = item;
+      return acc;
+    }, {});
+
+    equipment.forEach((item) => {
       if (item.slot === 'MainHand2' || item.slot === 'OffHand2') {
-        return acc;
+        return;
       }
 
-      // Get stat combo and slot multipliers
+      let slotValues: SlotStatValues | undefined;
+
+      if (armorStats[item.slot]) {
+        slotValues = armorStats[item.slot];
+      } else if (trinketStats[item.slot]) {
+        slotValues = trinketStats[item.slot];
+      } else if (item.slot === 'MainHand1') {
+        const isTwoHanded = item.weaponType ? TWO_HANDED_WEAPONS.includes(item.weaponType) : false;
+        slotValues = isTwoHanded ? ASCENDED_WEAPON_STATS.twoHanded : ASCENDED_WEAPON_STATS.oneHanded;
+      } else if (item.slot === 'OffHand1') {
+        const mainHand = equipmentBySlot['MainHand1'];
+        const mainIsTwoHanded = mainHand?.weaponType ? TWO_HANDED_WEAPONS.includes(mainHand.weaponType) : false;
+        if (mainIsTwoHanded) {
+          return;
+        }
+        slotValues = ASCENDED_WEAPON_STATS.oneHanded;
+      } else {
+        return;
+      }
+
       const statCombo = STAT_COMBOS[item.stat as StatCombo];
-      const multipliers = SLOT_MULTIPLIERS[item.slot];
+      if (!slotValues || !statCombo) {
+        return;
+      }
 
-      if (statCombo && multipliers) {
-        // Determine if this is 3-stat or 4-stat combo
-        const is4Stat = statCombo.length === 4;
-        const is3Stat = statCombo.length === 3;
-
-        // Apply stats based on priority and slot multipliers
+      if (statCombo.length === 9) {
+        statCombo.forEach((attribute) => {
+          totals[attribute] += slotValues.major9;
+        });
+      } else if (statCombo.length === 4) {
         statCombo.forEach((attribute, index) => {
-          let multiplier = 0;
-
-          if (is3Stat) {
-            // 3-stat: [major, minor, minor]
-            multiplier = index === 0 ? multipliers[0] : multipliers[2];
-          } else if (is4Stat) {
-            // 4-stat: [major, major, minor, minor]
-            multiplier = index < 2 ? multipliers[0] : multipliers[2];
-          } else {
-            // Celestial (9-stat) or other - use multipliers directly
-            multiplier = multipliers[Math.min(index, multipliers.length - 1)];
-          }
-
-          const value = Math.round(BASE_STAT_VALUE * multiplier);
-          acc[attribute] += value;
+          totals[attribute] += index < 2 ? slotValues.major4 : slotValues.minor4;
+        });
+      } else {
+        statCombo.forEach((attribute, index) => {
+          totals[attribute] += index === 0 ? slotValues.major3 : slotValues.minor3;
         });
       }
 
-      // Add infusion contributions
-      if (item.infusion1) {
-        const infusionBonus = INFUSION_BONUSES[item.infusion1];
-        if (infusionBonus) {
-          Object.entries(infusionBonus).forEach(([key, value]) => {
-            const attribute = key as AttributeKey;
-            acc[attribute] += value ?? 0;
-          });
-        }
-      }
+      (['infusion1', 'infusion2', 'infusion3'] as const).forEach((key) => {
+        const infusionType = item[key];
+        if (!infusionType) return;
+        const infusionBonus = INFUSION_BONUSES[infusionType];
+        if (!infusionBonus) return;
+        Object.entries(infusionBonus).forEach(([attribute, value]) => {
+          totals[attribute as AttributeKey] += value ?? 0;
+        });
+      });
+    });
 
-      return acc;
-    }, { ...BASE_ATTRIBUTES });
-
-    // Add rune bonuses
     if (runeItem?.details?.bonuses) {
-      runeItem.details.bonuses.forEach(bonus => {
+      runeItem.details.bonuses.forEach((bonus) => {
         const parsed = parseRuneBonus(bonus);
-        if (parsed) {
-          if (parsed.isPercent) {
-            // Convert percentage to flat stat (e.g., 10% boon duration = 150 points)
-            // For Expertise/BoonDuration: 15 points = 1%
-            const flatValue = parsed.value * 15;
-            acc[parsed.attribute] += flatValue;
-          } else {
-            // Direct stat bonus
-            acc[parsed.attribute] += parsed.value;
+        if (!parsed) return;
+
+        if (parsed.isPercent) {
+          const conversion = PERCENT_TO_ATTRIBUTE[parsed.attribute];
+          if (conversion) {
+            totals[parsed.attribute] += parsed.value * conversion;
           }
+        } else {
+          totals[parsed.attribute] += parsed.value;
         }
       });
     }
 
-    return acc;
+    return totals;
   }, [equipment, runeItem]);
 
   const maxValue = useMemo(() => {

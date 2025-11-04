@@ -1,11 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useBuildStore } from '../store/buildStore';
 import { gw2Api } from '../lib/gw2api';
-import type { GW2Skill, GW2Specialization, GW2Trait, GW2Item } from '../types/gw2';
+import type {
+  GW2SkillWithModes,
+  GW2Specialization,
+  GW2TraitWithModes,
+  GW2Item,
+} from '../types/gw2';
 import Tooltip from './Tooltip';
 import SkillPicker from './SkillPicker';
 import SearchableDropdown from './SearchableDropdown';
-import { STAT_COMBOS, INFUSIONS, RUNE_IDS, RELIC_IDS, SIGIL_IDS, PROFESSION_WEAPONS, TWO_HANDED_WEAPONS, OFF_HAND_WEAPONS, type StatCombo, type InfusionType } from '../types/gw2';
+import { STAT_COMBOS, INFUSIONS, RUNE_IDS, RELIC_IDS, SIGIL_IDS, PROFESSION_WEAPONS, TWO_HANDED_WEAPONS, OFF_HAND_WEAPONS, type StatCombo, type InfusionType, type GameMode } from '../types/gw2';
+import { resolveSkillMode, resolveTraitMode } from '../lib/modeUtils';
 
 type SectionType = 'skills' | 'traits' | 'equipment';
 type SkillSlot = 'heal' | 'utility1' | 'utility2' | 'utility3' | 'elite';
@@ -63,8 +69,8 @@ export default function BuildEditor({ activeSection }: BuildEditorProps) {
 
 // Skill Bar Content (without wrapper)
 function SkillBarContent() {
-  const { profession, skills, traits, setSkill } = useBuildStore();
-  const [availableSkills, setAvailableSkills] = useState<GW2Skill[]>([]);
+  const { profession, skills, traits, setSkill, gameMode } = useBuildStore();
+  const [availableSkills, setAvailableSkills] = useState<GW2SkillWithModes[]>([]);
   const [specs, setSpecs] = useState<GW2Specialization[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -97,7 +103,7 @@ function SkillBarContent() {
 
       // Deduplicate skills by NAME (not ID) to handle PvE/PvP versions
       // Prefer skills without specialization (core skills) over those with specialization
-      const skillsByName = new Map<string, GW2Skill>();
+      const skillsByName = new Map<string, GW2SkillWithModes>();
       filteredSkills.forEach(skill => {
         const existing = skillsByName.get(skill.name);
         if (!existing) {
@@ -119,7 +125,7 @@ function SkillBarContent() {
     }
   };
 
-  const getSkillsForSlot = (slotType: string): GW2Skill[] => {
+  const getSkillsForSlot = (slotType: string): GW2SkillWithModes[] => {
     // Get selected elite specializations (only elite specs, not core specs)
     const selectedEliteSpecs = [traits.spec1, traits.spec2, traits.spec3]
       .filter((id): id is number => typeof id === 'number')
@@ -173,12 +179,30 @@ function SkillBarContent() {
     const skillsForSlot = getSkillsForSlot(slotType);
     const selectedSkillId = skills[slot];
     const selectedSkill = availableSkills.find((skill) => skill.id === selectedSkillId);
+    const selectedSkillDetails = selectedSkill ? resolveSkillMode(selectedSkill, gameMode) : undefined;
+
+    // Debug logging
+    if (selectedSkill?.name === 'Well of Corruption') {
+      console.log('Well of Corruption debug:', {
+        gameMode,
+        hasModes: !!selectedSkill.modes,
+        hasWvw: !!selectedSkill.modes?.wvw,
+        selectedSkillDetails,
+        wvwRecharge: selectedSkillDetails?.facts?.find(f => f.type === 'Recharge')?.value
+      });
+    }
 
     return (
       <div key={slot} className="flex flex-col items-center gap-2">
         <span className="text-[10px] uppercase tracking-[0.3em] text-slate-500">{SLOT_LABELS[slot]}</span>
         {selectedSkill ? (
-          <Tooltip title={selectedSkill.name} content={selectedSkill.description || ''} icon={selectedSkill.icon}>
+          <Tooltip
+            title={selectedSkill.name}
+            content={selectedSkillDetails?.description || ''}
+            icon={selectedSkill.icon}
+            facts={selectedSkillDetails?.facts}
+            modeData={selectedSkill.modes}
+          >
             <div>
               <SkillPicker
                 skills={skillsForSlot}
@@ -186,6 +210,7 @@ function SkillBarContent() {
                 onSelect={(skillId) => setSkill(slot, skillId)}
                 slotLabel={SLOT_LABELS[slot]}
                 selectedSkill={selectedSkill}
+                gameMode={gameMode}
               />
             </div>
           </Tooltip>
@@ -196,6 +221,7 @@ function SkillBarContent() {
             onSelect={(skillId) => setSkill(slot, skillId)}
             slotLabel={SLOT_LABELS[slot]}
             selectedSkill={undefined}
+            gameMode={gameMode}
           />
         )}
       </div>
@@ -225,7 +251,7 @@ function SkillBarContent() {
 
 // Trait Panel Content (without wrapper)
 function TraitPanelContent() {
-  const { profession, traits, setSpecialization, setTrait } = useBuildStore();
+  const { profession, traits, setSpecialization, setTrait, gameMode } = useBuildStore();
   const [specs, setSpecs] = useState<GW2Specialization[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -300,6 +326,7 @@ function TraitPanelContent() {
             <TraitSelector
               specId={selectedSpecId}
               selectedChoices={selectedChoices}
+              gameMode={gameMode}
               onTraitSelect={(tier, traitId) => setTrait(slotNum, tier, traitId)}
             />
           </div>
@@ -330,11 +357,12 @@ function TraitPanelContent() {
 interface TraitSelectorProps {
   specId: number;
   selectedChoices: [number | null, number | null, number | null];
+  gameMode?: GameMode;
   onTraitSelect: (tier: 0 | 1 | 2, traitId: number | null) => void;
 }
 
-function TraitSelector({ specId, selectedChoices, onTraitSelect }: TraitSelectorProps) {
-  const [traits, setTraits] = useState<GW2Trait[]>([]);
+function TraitSelector({ specId, selectedChoices, gameMode, onTraitSelect }: TraitSelectorProps) {
+  const [traits, setTraits] = useState<GW2TraitWithModes[]>([]);
   const [spec, setSpec] = useState<GW2Specialization | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -383,9 +411,17 @@ function TraitSelector({ specId, selectedChoices, onTraitSelect }: TraitSelector
 
             const tierIndex = colIndex;
             const isSelected = selectedChoices[tierIndex] === trait.id;
+            const traitDetails = resolveTraitMode(trait, gameMode);
 
             return (
-              <Tooltip key={trait.id} title={trait.name} content={trait.description} icon={trait.icon}>
+              <Tooltip
+                key={trait.id}
+                title={trait.name}
+                content={traitDetails?.description || ''}
+                icon={trait.icon}
+                facts={traitDetails?.facts}
+                modeData={trait.modes}
+              >
                 <button
                   onClick={() => onTraitSelect(tierIndex as 0 | 1 | 2, trait.id)}
                   className={`group relative flex h-12 w-12 items-center justify-center rounded-xl border-2 transition ${
@@ -506,6 +542,8 @@ function EquipmentPanelContent() {
     const mainHandSlot = item.slot === 'OffHand1' ? 'MainHand1' : item.slot === 'OffHand2' ? 'MainHand2' : null;
     const mainHandWeapon = mainHandSlot ? equipment.find(e => e.slot === mainHandSlot)?.weaponType : null;
     const isMainHandTwoHanded = mainHandWeapon ? TWO_HANDED_WEAPONS.includes(mainHandWeapon) : false;
+    const isTwoHanded = item.weaponType ? TWO_HANDED_WEAPONS.includes(item.weaponType) : false;
+    const allowSecondSigil = !isOffHand && isTwoHanded;
 
     // Get available weapons for this profession
     const availableWeapons = profession ? PROFESSION_WEAPONS[profession] || [] : [];
@@ -542,7 +580,12 @@ function EquipmentPanelContent() {
                 value={item.weaponType || ''}
                 onChange={(event) => {
                   const value = event.target.value;
-                  updateEquipment(item.slot, { weaponType: value ? value as typeof slotWeapons[number] : undefined });
+                  const nextType = value ? (value as typeof slotWeapons[number]) : undefined;
+                  const twoHandedSelection = nextType ? TWO_HANDED_WEAPONS.includes(nextType) : false;
+                  updateEquipment(item.slot, {
+                    weaponType: nextType,
+                    ...(twoHandedSelection ? {} : { sigil2Id: undefined }),
+                  });
                 }}
                 className="w-full rounded-lg border border-slate-800 bg-slate-950/70 px-2 py-1.5 text-xs text-slate-200 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
               >
@@ -598,14 +641,17 @@ function EquipmentPanelContent() {
               <div className="flex gap-2">
                 <SearchableDropdown
                   items={sigils}
-                  selectedId={item.sigil2Id}
-                  onSelect={(id) => updateEquipment(item.slot, { sigil2Id: id })}
+                  selectedId={allowSecondSigil ? item.sigil2Id : undefined}
+                  onSelect={(id) => {
+                    if (!allowSecondSigil) return;
+                    updateEquipment(item.slot, { sigil2Id: id });
+                  }}
                   getItemId={(s) => s.id}
                   getItemLabel={(s) => s.name.replace('Superior Sigil of the ', '').replace('Superior Sigil of ', '')}
                   placeholder="Select Sigil"
-                  disabled={loading}
+                  disabled={loading || !allowSecondSigil}
                 />
-                {item.sigil2Id && (() => {
+                {allowSecondSigil && item.sigil2Id && (() => {
                   const selectedSigil = sigils.find(s => s.id === item.sigil2Id);
                   return selectedSigil && (
                     <Tooltip
@@ -623,6 +669,11 @@ function EquipmentPanelContent() {
                   );
                 })()}
               </div>
+              {!allowSecondSigil && (
+                <p className="mt-1 text-[10px] text-slate-500">
+                  Second sigil available on two-handed weapons only.
+                </p>
+              )}
             </div>
           </div>
         )}
