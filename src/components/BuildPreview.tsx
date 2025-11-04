@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useBuildStore } from '../store/buildStore';
 import { gw2Api } from '../lib/gw2api';
-import type { GW2Skill, GW2Trait, GW2Specialization, SkillSelection } from '../types/gw2';
+import type { GW2SkillWithModes, GW2TraitWithModes, GW2Specialization, SkillSelection } from '../types/gw2';
+import { resolveSkillMode, resolveTraitMode } from '../lib/modeUtils';
 import Tooltip from './Tooltip';
 
 type SkillSlot = keyof SkillSelection;
@@ -23,9 +24,9 @@ const SKILL_LABELS: Record<SkillSlot, string> = {
 };
 
 export default function BuildPreview() {
-  const { skills, traits, profession } = useBuildStore();
-  const [skillData, setSkillData] = useState<Record<string, GW2Skill>>({});
-  const [traitData, setTraitData] = useState<Record<number, GW2Trait>>({});
+  const { skills, traits, profession, gameMode } = useBuildStore();
+  const [skillData, setSkillData] = useState<Record<string, GW2SkillWithModes>>({});
+  const [traitData, setTraitData] = useState<Record<number, GW2TraitWithModes>>({});
   const [specData, setSpecData] = useState<Record<number, GW2Specialization>>({});
   const [loading, setLoading] = useState(false);
 
@@ -47,7 +48,7 @@ export default function BuildPreview() {
       });
 
       const skillResults = await Promise.all(skillPromises);
-      const newSkillData: Record<string, GW2Skill> = {};
+      const newSkillData: Record<string, GW2SkillWithModes> = {};
       skillResults.forEach((result) => {
         if (result) {
           newSkillData[result[0]] = result[1];
@@ -78,7 +79,7 @@ export default function BuildPreview() {
       });
       setSpecData(newSpecData);
 
-      const newTraitData: Record<number, GW2Trait> = {};
+      const newTraitData: Record<number, GW2TraitWithModes> = {};
       traitsResult.forEach((trait) => {
         newTraitData[trait.id] = trait;
       });
@@ -127,13 +128,14 @@ export default function BuildPreview() {
           <div className="grid grid-cols-5 gap-3">
             {SKILL_SLOT_ORDER.map((slot) => {
               const skill = skillData[slot];
+              const skillDetails = skill ? resolveSkillMode(skill, gameMode) : undefined;
               return (
                 <div key={slot} className="flex flex-col items-center">
                   <div className="text-[10px] uppercase tracking-wide text-slate-500 mb-2">
                     {SKILL_LABELS[slot]}
                   </div>
                   {skill ? (
-                    <Tooltip title={skill.name} content={skill.description || ''} icon={skill.icon}>
+                    <Tooltip title={skill.name} content={skillDetails?.description || ''} icon={skill.icon}>
                       <div className="relative group cursor-pointer">
                         <div className="h-16 w-16 overflow-hidden rounded-xl border-2 border-slate-700 bg-slate-900 transition group-hover:border-yellow-400">
                           <img
@@ -194,8 +196,10 @@ export default function BuildPreview() {
                         const trait = traitData[traitId];
                         if (!trait) return null;
 
+                        const traitDetails = resolveTraitMode(trait, gameMode);
+
                         return (
-                          <Tooltip key={traitId} title={trait.name} content={trait.description} icon={trait.icon}>
+                          <Tooltip key={traitId} title={trait.name} content={traitDetails?.description || ''} icon={trait.icon}>
                             <div className="relative group cursor-pointer">
                               <div className="h-12 w-12 overflow-hidden rounded-lg border-2 border-yellow-400 bg-slate-900 transition group-hover:border-yellow-300">
                                 <img

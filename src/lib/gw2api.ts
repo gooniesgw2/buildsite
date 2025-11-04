@@ -1,4 +1,19 @@
-import type { GW2Skill, GW2Trait, GW2Specialization, GW2ItemStat, GW2Item } from '../types/gw2';
+import type {
+  GW2Skill,
+  GW2SkillModeData,
+  GW2SkillWithModes,
+  GW2Trait,
+  GW2TraitModeData,
+  GW2TraitWithModes,
+  GW2Specialization,
+  GW2ItemStat,
+  GW2Item,
+} from '../types/gw2';
+import {
+  mergeModeData,
+  mergeSkillModeOverrides,
+  type SkillModeOverrideInfo,
+} from './modeMerging';
 
 const API_BASE = 'https://api.guildwars2.com/v2';
 const CACHE_DURATION = 1000 * 60 * 60 * 24; // 24 hours
@@ -12,6 +27,46 @@ class GW2ApiClient {
   private cache: Map<string, CacheEntry<any>> = new Map();
   private staticData: Record<string, any> = {};
   private staticDataLoaded = false;
+  private skillOverrideLookup: Map<number, SkillModeOverrideInfo> = new Map();
+  private processedSplitProfessions: Set<string> = new Set();
+
+  private normalizeSkill(skill: GW2Skill): GW2SkillWithModes {
+    const { description, facts, traited_facts, pve, pvp, wvw, ...rest } = skill;
+    const defaultMode: GW2SkillModeData = {
+      description,
+      facts,
+      traited_facts,
+    };
+
+    return {
+      ...rest,
+      modes: {
+        default: defaultMode,
+        pve: pve ? mergeModeData(defaultMode, pve) : undefined,
+        pvp: pvp ? mergeModeData(defaultMode, pvp) : undefined,
+        wvw: wvw ? mergeModeData(defaultMode, wvw) : undefined,
+      },
+    };
+  }
+
+  private normalizeTrait(trait: GW2Trait): GW2TraitWithModes {
+    const { description, facts, traited_facts, pve, pvp, wvw, ...rest } = trait;
+    const defaultMode: GW2TraitModeData = {
+      description,
+      facts,
+      traited_facts,
+    };
+
+    return {
+      ...rest,
+      modes: {
+        default: defaultMode,
+        pve: pve ? mergeModeData(defaultMode, pve) : undefined,
+        pvp: pvp ? mergeModeData(defaultMode, pvp) : undefined,
+        wvw: wvw ? mergeModeData(defaultMode, wvw) : undefined,
+      },
+    };
+  }
 
   private async loadStaticData(): Promise<void> {
     if (this.staticDataLoaded) return;
@@ -92,13 +147,71 @@ class GW2ApiClient {
     this.loadFromLocalStorage();
   }
 
+  private registerSkillOverrides(
+    lookup: Map<number, SkillModeOverrideInfo>
+  ) {
+    for (const [overrideId, info] of lookup.entries()) {
+      const existing = this.skillOverrideLookup.get(overrideId);
+      if (existing) {
+        const mergedModes = Array.from(
+          new Set([...existing.modes, ...info.modes])
+        ) as SkillModeOverrideInfo['modes'];
+
+        this.skillOverrideLookup.set(overrideId, {
+          baseId: info.baseId,
+          modes: mergedModes,
+        });
+      } else {
+        this.skillOverrideLookup.set(overrideId, info);
+      }
+    }
+  }
+
+  private async resolveOverrideSkill(
+    info: SkillModeOverrideInfo
+  ): Promise<GW2SkillWithModes> {
+    const baseSkill = await this.getSkill(info.baseId);
+    const primaryMode = info.modes[0];
+
+    if (!primaryMode) {
+      return baseSkill;
+    }
+
+    const primaryData = baseSkill.modes[primaryMode] ?? baseSkill.modes.default;
+
+    return {
+      ...baseSkill,
+      modes: {
+        ...baseSkill.modes,
+        default: primaryData,
+      },
+    };
+  }
+
   // Fetch a single skill by ID
-  async getSkill(id: number): Promise<GW2Skill> {
-    return await this.fetchWithCache<GW2Skill>(`/skills/${id}`);
+  async getSkill(id: number): Promise<GW2SkillWithModes> {
+    const cachedOverride = this.skillOverrideLookup.get(id);
+    if (cachedOverride) {
+      return this.resolveOverrideSkill(cachedOverride);
+    }
+
+    const skill = await this.fetchWithCache<GW2Skill>(`/skills/${id}`);
+    const normalized = this.normalizeSkill(skill);
+
+    const profession = normalized.professions?.[0];
+    if (profession && !this.processedSplitProfessions.has(profession)) {
+      await this.getSkills(profession);
+      const refreshedOverride = this.skillOverrideLookup.get(id);
+      if (refreshedOverride) {
+        return this.resolveOverrideSkill(refreshedOverride);
+      }
+    }
+
+    return normalized;
   }
 
   // Fetch all skills for a profession
-  async getSkills(profession?: string): Promise<GW2Skill[]> {
+  async getSkills(profession?: string): Promise<GW2SkillWithModes[]> {
     // Try to load from static data first
     await this.loadStaticData();
 
@@ -106,7 +219,11 @@ class GW2ApiClient {
       const skills = this.staticData.skills[profession];
       if (skills) {
         console.log(`📦 Loaded ${skills.length} ${profession} skills from static data`);
-        return skills;
+        const normalized = skills.map((skill: GW2Skill) => this.normalizeSkill(skill));
+        const { skills: mergedSkills, overrideLookup } = mergeSkillModeOverrides(normalized);
+        this.registerSkillOverrides(overrideLookup);
+        this.processedSplitProfessions.add(profession);
+        return mergedSkills;
       }
     }
 
@@ -115,38 +232,50 @@ class GW2ApiClient {
     const allSkillIds = await this.fetchWithCache<number[]>('/skills');
 
     // Fetch in batches of 200 (API limit)
-    const skills: GW2Skill[] = [];
+    const skills: GW2SkillWithModes[] = [];
     for (let i = 0; i < allSkillIds.length; i += 200) {
       const batch = allSkillIds.slice(i, i + 200);
       const batchSkills = await this.fetchWithCache<GW2Skill[]>(
         `/skills?ids=${batch.join(',')}`
       );
-      skills.push(...batchSkills);
+      skills.push(...batchSkills.map(skill => this.normalizeSkill(skill)));
     }
 
+    const { skills: mergedSkills, overrideLookup } = mergeSkillModeOverrides(skills);
+    this.registerSkillOverrides(overrideLookup);
+
     if (profession) {
+      this.processedSplitProfessions.add(profession);
       // Case-insensitive profession filter
       const profLower = profession.toLowerCase();
-      return skills.filter(s =>
+      return mergedSkills.filter(s =>
         s.professions && s.professions.some(p => p.toLowerCase() === profLower)
       );
     }
-    return skills;
+
+    mergedSkills.forEach(skill => {
+      skill.professions?.forEach(prof => this.processedSplitProfessions.add(prof));
+    });
+
+    return mergedSkills;
   }
 
   // Fetch a single trait by ID
-  async getTrait(id: number): Promise<GW2Trait> {
-    return await this.fetchWithCache<GW2Trait>(`/traits/${id}`);
+  async getTrait(id: number): Promise<GW2TraitWithModes> {
+    const trait = await this.fetchWithCache<GW2Trait>(`/traits/${id}`);
+    return this.normalizeTrait(trait);
   }
 
   // Fetch traits for a specialization
-  async getTraits(specializationId: number): Promise<GW2Trait[]> {
+  async getTraits(specializationId: number): Promise<GW2TraitWithModes[]> {
     const spec = await this.getSpecialization(specializationId);
     const traitIds = [...spec.minor_traits, ...spec.major_traits];
 
-    return await this.fetchWithCache<GW2Trait[]>(
+    const traits = await this.fetchWithCache<GW2Trait[]>(
       `/traits?ids=${traitIds.join(',')}`
     );
+
+    return traits.map(trait => this.normalizeTrait(trait));
   }
 
   // Fetch all specializations for a profession
