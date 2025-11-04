@@ -176,7 +176,7 @@ function TraitSelector({ specId, selectedChoices, gameMode, onTraitSelect }: Tra
   if (!spec) return null;
 
   const majorTraits = traits.filter(t => spec.major_traits.includes(t.id));
-  const minorTraits = traits.filter(t => spec.minor_traits.includes(t.id));
+  const minorTraits = traits.filter(t => spec.minor_traits.includes(t.id)).sort((a, b) => a.tier - b.tier);
 
   // Group by tier, then sort by order within each tier
   const traitsByTier = [1, 2, 3].map(tier => {

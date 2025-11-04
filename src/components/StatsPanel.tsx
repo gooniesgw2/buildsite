@@ -338,50 +338,64 @@ export default function StatsPanel() {
 
   // Calculate gear summary
   const gearSummary = useMemo(() => {
-    const weapons: Array<{ text: string; sigil1Id?: number; sigil2Id?: number }> = [];
-    const armorStats: Record<string, number> = {};
-    const trinketStats: Record<string, number> = {};
+    // Weapon sets
+    const weaponSet1: Array<{ text: string; sigil1Id?: number; sigil2Id?: number }> = [];
+    const weaponSet2: Array<{ text: string; sigil1Id?: number; sigil2Id?: number }> = [];
+
+    // Individual armor pieces
+    const armorPieces: Array<{ slot: string; stat: string }> = [];
+
+    // Individual trinkets
+    const trinkets: Array<{ slot: string; stat: string }> = [];
 
     equipment.forEach((item) => {
-      // Weapons
+      // Weapon Set 1
       if (item.slot === 'MainHand1' && item.weaponType && item.stat) {
         const isTwoHanded = TWO_HANDED_WEAPONS.includes(item.weaponType);
-        weapons.push({
+        weaponSet1.push({
           text: `${item.weaponType} - ${item.stat}${isTwoHanded ? ' (2H)' : ''}`,
           sigil1Id: item.sigil1Id,
           sigil2Id: item.sigil2Id,
         });
       } else if (item.slot === 'OffHand1' && item.weaponType && item.stat) {
-        weapons.push({
+        weaponSet1.push({
           text: `${item.weaponType} - ${item.stat}`,
           sigil1Id: item.sigil1Id,
         });
-      } else if (item.slot === 'MainHand2' && item.weaponType && item.stat) {
+      }
+
+      // Weapon Set 2
+      if (item.slot === 'MainHand2' && item.weaponType && item.stat) {
         const isTwoHanded = TWO_HANDED_WEAPONS.includes(item.weaponType);
-        weapons.push({
+        weaponSet2.push({
           text: `${item.weaponType} - ${item.stat}${isTwoHanded ? ' (2H)' : ''}`,
           sigil1Id: item.sigil1Id,
           sigil2Id: item.sigil2Id,
         });
       } else if (item.slot === 'OffHand2' && item.weaponType && item.stat) {
-        weapons.push({
+        weaponSet2.push({
           text: `${item.weaponType} - ${item.stat}`,
           sigil1Id: item.sigil1Id,
         });
       }
 
-      // Armor
+      // Armor pieces
       if (['Helm', 'Shoulders', 'Coat', 'Gloves', 'Leggings', 'Boots'].includes(item.slot) && item.stat) {
-        armorStats[item.stat] = (armorStats[item.stat] || 0) + 1;
+        armorPieces.push({ slot: item.slot, stat: item.stat });
       }
 
       // Trinkets
       if (['Amulet', 'Ring1', 'Ring2', 'Accessory1', 'Accessory2', 'Backpack'].includes(item.slot) && item.stat) {
-        trinketStats[item.stat] = (trinketStats[item.stat] || 0) + 1;
+        const displaySlot = item.slot === 'Ring1' ? 'ring' :
+                           item.slot === 'Ring2' ? 'ring' :
+                           item.slot === 'Accessory1' ? 'accessory' :
+                           item.slot === 'Accessory2' ? 'accessory' :
+                           item.slot === 'Amulet' ? 'amulet' : 'back';
+        trinkets.push({ slot: displaySlot, stat: item.stat });
       }
     });
 
-    return { weapons, armorStats, trinketStats };
+    return { weaponSet1, weaponSet2, armorPieces, trinkets };
   }, [equipment]);
 
   return (
@@ -463,116 +477,188 @@ export default function StatsPanel() {
       )}
 
       {/* Gear Summary */}
-      <div className="mt-6 pt-4 border-t border-slate-800/60 space-y-3">
+      <div className="mt-6 pt-4 border-t border-slate-800/60 space-y-4">
         <p className="text-sm font-medium text-white">Gear Summary</p>
 
-        {/* Weapons */}
-        {gearSummary.weapons.length > 0 && (
-          <div className="space-y-1">
-            {gearSummary.weapons.map((weapon, idx) => (
-              <div key={idx} className="flex items-center gap-1.5 text-xs text-slate-300">
-                <span>{weapon.text}</span>
-                {(weapon.sigil1Id || weapon.sigil2Id) && (
-                  <div className="flex gap-1 ml-auto">
-                    {weapon.sigil1Id && sigilItems.get(weapon.sigil1Id) && (
-                      <Tooltip
-                        title={sigilItems.get(weapon.sigil1Id)!.name}
-                        content={sigilItems.get(weapon.sigil1Id)!.details?.infix_upgrade?.buff?.description || sigilItems.get(weapon.sigil1Id)!.description || ''}
-                        icon={sigilItems.get(weapon.sigil1Id)!.icon}
-                        rarity={sigilItems.get(weapon.sigil1Id)!.rarity}
-                        itemType={sigilItems.get(weapon.sigil1Id)!.type}
-                      >
-                        <img src={sigilItems.get(weapon.sigil1Id)!.icon} alt="" className="w-4 h-4 rounded flex-shrink-0 cursor-help" />
-                      </Tooltip>
-                    )}
-                    {weapon.sigil2Id && sigilItems.get(weapon.sigil2Id) && (
-                      <Tooltip
-                        title={sigilItems.get(weapon.sigil2Id)!.name}
-                        content={sigilItems.get(weapon.sigil2Id)!.details?.infix_upgrade?.buff?.description || sigilItems.get(weapon.sigil2Id)!.description || ''}
-                        icon={sigilItems.get(weapon.sigil2Id)!.icon}
-                        rarity={sigilItems.get(weapon.sigil2Id)!.rarity}
-                        itemType={sigilItems.get(weapon.sigil2Id)!.type}
-                      >
-                        <img src={sigilItems.get(weapon.sigil2Id)!.icon} alt="" className="w-4 h-4 rounded flex-shrink-0 cursor-help" />
-                      </Tooltip>
-                    )}
-                  </div>
-                )}
+        {/* Weapon Sets with Swap Indicator */}
+        {(gearSummary.weaponSet1.length > 0 || gearSummary.weaponSet2.length > 0) && (
+          <div className="flex items-start gap-2">
+            {/* Weapon Set 1 */}
+            <div className="flex-1 space-y-1">
+              {gearSummary.weaponSet1.map((weapon, idx) => (
+                <div key={idx} className="flex items-center gap-1 text-[11px] text-slate-300">
+                  <span className="truncate">{weapon.text.replace(' - ', '\n').split('\n')[0]}</span>
+                  {(weapon.sigil1Id || weapon.sigil2Id) && (
+                    <div className="flex gap-0.5 ml-auto flex-shrink-0">
+                      {weapon.sigil1Id && sigilItems.get(weapon.sigil1Id) && (
+                        <Tooltip
+                          title={sigilItems.get(weapon.sigil1Id)!.name}
+                          content={sigilItems.get(weapon.sigil1Id)!.details?.infix_upgrade?.buff?.description || sigilItems.get(weapon.sigil1Id)!.description || ''}
+                          icon={sigilItems.get(weapon.sigil1Id)!.icon}
+                          rarity={sigilItems.get(weapon.sigil1Id)!.rarity}
+                          itemType={sigilItems.get(weapon.sigil1Id)!.type}
+                        >
+                          <img src={sigilItems.get(weapon.sigil1Id)!.icon} alt="" className="w-3.5 h-3.5 rounded flex-shrink-0 cursor-help" />
+                        </Tooltip>
+                      )}
+                      {weapon.sigil2Id && sigilItems.get(weapon.sigil2Id) && (
+                        <Tooltip
+                          title={sigilItems.get(weapon.sigil2Id)!.name}
+                          content={sigilItems.get(weapon.sigil2Id)!.details?.infix_upgrade?.buff?.description || sigilItems.get(weapon.sigil2Id)!.description || ''}
+                          icon={sigilItems.get(weapon.sigil2Id)!.icon}
+                          rarity={sigilItems.get(weapon.sigil2Id)!.rarity}
+                          itemType={sigilItems.get(weapon.sigil2Id)!.type}
+                        >
+                          <img src={sigilItems.get(weapon.sigil2Id)!.icon} alt="" className="w-3.5 h-3.5 rounded flex-shrink-0 cursor-help" />
+                        </Tooltip>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Swap Indicator */}
+            {gearSummary.weaponSet1.length > 0 && gearSummary.weaponSet2.length > 0 && (
+              <div className="flex items-center justify-center px-1">
+                <img
+                  src="https://wiki.guildwars2.com/images/c/ce/Weapon_Swap_Button.png"
+                  alt="Weapon Swap"
+                  className="w-5 h-5 opacity-60"
+                />
               </div>
-            ))}
+            )}
+
+            {/* Weapon Set 2 */}
+            <div className="flex-1 space-y-1">
+              {gearSummary.weaponSet2.map((weapon, idx) => (
+                <div key={idx} className="flex items-center gap-1 text-[11px] text-slate-300">
+                  <span className="truncate">{weapon.text.replace(' - ', '\n').split('\n')[0]}</span>
+                  {(weapon.sigil1Id || weapon.sigil2Id) && (
+                    <div className="flex gap-0.5 ml-auto flex-shrink-0">
+                      {weapon.sigil1Id && sigilItems.get(weapon.sigil1Id) && (
+                        <Tooltip
+                          title={sigilItems.get(weapon.sigil1Id)!.name}
+                          content={sigilItems.get(weapon.sigil1Id)!.details?.infix_upgrade?.buff?.description || sigilItems.get(weapon.sigil1Id)!.description || ''}
+                          icon={sigilItems.get(weapon.sigil1Id)!.icon}
+                          rarity={sigilItems.get(weapon.sigil1Id)!.rarity}
+                          itemType={sigilItems.get(weapon.sigil1Id)!.type}
+                        >
+                          <img src={sigilItems.get(weapon.sigil1Id)!.icon} alt="" className="w-3.5 h-3.5 rounded flex-shrink-0 cursor-help" />
+                        </Tooltip>
+                      )}
+                      {weapon.sigil2Id && sigilItems.get(weapon.sigil2Id) && (
+                        <Tooltip
+                          title={sigilItems.get(weapon.sigil2Id)!.name}
+                          content={sigilItems.get(weapon.sigil2Id)!.details?.infix_upgrade?.buff?.description || sigilItems.get(weapon.sigil2Id)!.description || ''}
+                          icon={sigilItems.get(weapon.sigil2Id)!.icon}
+                          rarity={sigilItems.get(weapon.sigil2Id)!.rarity}
+                          itemType={sigilItems.get(weapon.sigil2Id)!.type}
+                        >
+                          <img src={sigilItems.get(weapon.sigil2Id)!.icon} alt="" className="w-3.5 h-3.5 rounded flex-shrink-0 cursor-help" />
+                        </Tooltip>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
-        {/* Separator */}
-        {gearSummary.weapons.length > 0 && (relicItem || runeItem) && (
-          <div className="border-t border-slate-800/40" />
-        )}
+        {/* Armor and Trinkets in Two Columns */}
+        {(gearSummary.armorPieces.length > 0 || gearSummary.trinkets.length > 0) && (
+          <div className="grid grid-cols-2 gap-4">
+            {/* Armor Column */}
+            <div className="space-y-2">
+              <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Armor</div>
+              <div className="space-y-1">
+                {gearSummary.armorPieces.map((piece, idx) => {
+                  const slotIcons: Record<string, string> = {
+                    'Helm': 'https://wiki.guildwars2.com/images/5/51/Mistforged_Triumphant_Hero%27s_Warhelm.png',
+                    'Shoulders': 'https://wiki.guildwars2.com/images/1/10/Mistforged_Triumphant_Hero%27s_Pauldrons.png',
+                    'Coat': 'https://wiki.guildwars2.com/images/5/59/Sublime_Mistforged_Triumphant_Hero%27s_Breastplate.png',
+                    'Gloves': 'https://wiki.guildwars2.com/images/d/dd/Mistforged_Triumphant_Hero%27s_Gauntlets.png',
+                    'Leggings': 'https://wiki.guildwars2.com/images/b/bc/Mistforged_Triumphant_Hero%27s_Legplates.png',
+                    'Boots': 'https://wiki.guildwars2.com/images/7/7f/Mistforged_Triumphant_Hero%27s_Wargreaves.png',
+                  };
 
-        {/* Relic */}
-        {relicItem && (
-          <Tooltip
-            title={relicItem.name}
-            content={relicItem.description || ''}
-            icon={relicItem.icon}
-            bonuses={relicItem.details?.bonuses}
-            rarity={relicItem.rarity}
-            itemType={relicItem.type}
-          >
-            <div className="flex items-center gap-1.5 text-xs text-slate-300 cursor-help hover:text-white transition-colors">
-              <img src={relicItem.icon} alt={relicItem.name} className="w-4 h-4 rounded flex-shrink-0" />
-              <span>Relic: {relicItem.name.replace('Relic of the ', '')}</span>
-            </div>
-          </Tooltip>
-        )}
-
-        {/* Runes */}
-        {runeItem && (
-          <Tooltip
-            title={runeItem.name}
-            content={runeItem.description || ''}
-            icon={runeItem.icon}
-            bonuses={runeItem.details?.bonuses}
-            rarity={runeItem.rarity}
-            itemType={runeItem.type}
-          >
-            <div className="flex items-center gap-1.5 text-xs text-slate-300 cursor-help hover:text-white transition-colors">
-              <img src={runeItem.icon} alt={runeItem.name} className="w-4 h-4 rounded flex-shrink-0" />
-              <span>Runes: {runeItem.name.replace('Superior Rune of ', '')}</span>
-            </div>
-          </Tooltip>
-        )}
-
-        {/* Separator */}
-        {(relicItem || runeItem) && Object.keys(gearSummary.armorStats).length > 0 && (
-          <div className="border-t border-slate-800/40" />
-        )}
-
-        {/* Armor */}
-        {Object.keys(gearSummary.armorStats).length > 0 && (
-          <div className="space-y-1">
-            <div className="text-xs text-slate-400">Armor:</div>
-            {Object.entries(gearSummary.armorStats).map(([stat, count]) => (
-              <div key={stat} className="text-xs text-slate-300 pl-2">
-                {count}x {stat}
+                  return (
+                    <div key={idx} className="flex items-center gap-1.5 text-[11px] text-slate-300">
+                      <img src={slotIcons[piece.slot]} alt={piece.slot} title={piece.slot} className="w-4 h-4" />
+                      <span className="text-slate-400">{piece.stat}</span>
+                    </div>
+                  );
+                })}
               </div>
-            ))}
-          </div>
-        )}
 
-        {/* Separator */}
-        {Object.keys(gearSummary.armorStats).length > 0 && Object.keys(gearSummary.trinketStats).length > 0 && (
-          <div className="border-t border-slate-800/40" />
-        )}
+              {/* Rune at bottom of Armor column */}
+              {runeItem && (
+                <div className="pt-2 border-t border-slate-800/40">
+                  <Tooltip
+                    title={runeItem.name}
+                    content={runeItem.description || ''}
+                    icon={runeItem.icon}
+                    bonuses={runeItem.details?.bonuses}
+                    rarity={runeItem.rarity}
+                    itemType={runeItem.type}
+                  >
+                    <div className="flex items-center gap-1.5 text-[11px] text-slate-300 cursor-help hover:text-white transition-colors">
+                      <img src={runeItem.icon} alt={runeItem.name} className="w-3.5 h-3.5 rounded flex-shrink-0" />
+                      <span className="truncate">{runeItem.name.replace('Superior Rune of ', '')}</span>
+                    </div>
+                  </Tooltip>
+                </div>
+              )}
+            </div>
 
-        {/* Trinkets */}
-        {Object.keys(gearSummary.trinketStats).length > 0 && (
-          <div className="space-y-1">
-            <div className="text-xs text-slate-400">Trinkets:</div>
-            {Object.entries(gearSummary.trinketStats).map(([stat, count]) => (
-              <div key={stat} className="text-xs text-slate-300 pl-2">
-                {count}x {stat}
+            {/* Trinkets Column */}
+            <div className="space-y-2">
+              <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Trinkets</div>
+              <div className="space-y-1">
+                {gearSummary.trinkets.map((trinket, idx) => {
+                  const slotIcons: Record<string, string> = {
+                    'amulet': 'https://wiki.guildwars2.com/images/b/bb/Mist_Pendant.png',
+                    'ring': 'https://wiki.guildwars2.com/images/0/04/Mist_Band_%28Infused%29.png',
+                    'accessory': 'https://wiki.guildwars2.com/images/6/6a/Mist_Talisman.png',
+                    'back': 'https://wiki.guildwars2.com/images/2/20/Warbringer.png',
+                  };
+
+                  const slotNames: Record<string, string> = {
+                    'amulet': 'Amulet',
+                    'ring': 'Ring',
+                    'accessory': 'Accessory',
+                    'back': 'Back',
+                  };
+
+                  return (
+                    <div key={idx} className="flex items-center gap-1.5 text-[11px] text-slate-300">
+                      <img src={slotIcons[trinket.slot]} alt={trinket.slot} title={slotNames[trinket.slot]} className="w-4 h-4" />
+                      <span className="text-slate-400">{trinket.stat}</span>
+                    </div>
+                  );
+                })}
               </div>
-            ))}
+
+              {/* Relic at bottom of Trinkets column */}
+              {relicItem && (
+                <div className="pt-2 border-t border-slate-800/40">
+                  <Tooltip
+                    title={relicItem.name}
+                    content={relicItem.description || ''}
+                    icon={relicItem.icon}
+                    bonuses={relicItem.details?.bonuses}
+                    rarity={relicItem.rarity}
+                    itemType={relicItem.type}
+                  >
+                    <div className="flex items-center gap-1.5 text-[11px] text-slate-300 cursor-help hover:text-white transition-colors">
+                      <img src={relicItem.icon} alt={relicItem.name} className="w-3.5 h-3.5 rounded flex-shrink-0" />
+                      <span className="truncate">{relicItem.name.replace('Relic of the ', '')}</span>
+                    </div>
+                  </Tooltip>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

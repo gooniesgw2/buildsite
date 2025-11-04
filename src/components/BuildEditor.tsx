@@ -393,6 +393,8 @@ function TraitSelector({ specId, selectedChoices, gameMode, onTraitSelect }: Tra
   if (!spec) return null;
 
   const majorTraits = traits.filter(t => spec.major_traits.includes(t.id));
+  const minorTraits = traits.filter(t => spec.minor_traits.includes(t.id)).sort((a, b) => a.tier - b.tier);
+
   const traitsByTier = [1, 2, 3].map(tier => {
     const tierTraits = majorTraits.filter(t => t.tier === tier);
     return tierTraits.sort((a, b) => a.order - b.order);
@@ -444,6 +446,44 @@ function TraitSelector({ specId, selectedChoices, gameMode, onTraitSelect }: Tra
           })}
         </div>
       ))}
+
+      {/* Minor Traits Section */}
+      {minorTraits.length > 0 && (
+        <>
+          {/* Separator */}
+          <div className="flex items-center gap-2 pt-2">
+            <div className="flex-1 border-t border-slate-800/40" />
+            <div className="rounded-lg bg-slate-900/70 px-2 py-1 text-[9px] font-semibold uppercase tracking-wider text-slate-400">
+              Minor
+            </div>
+            <div className="flex-1 border-t border-slate-800/40" />
+          </div>
+
+          {/* Minor Traits Grid */}
+          <div className="flex justify-center gap-3 pt-1">
+            {minorTraits.map((trait) => {
+              const traitDetails = resolveTraitMode(trait, gameMode);
+
+              return (
+                <Tooltip
+                  key={trait.id}
+                  title={trait.name}
+                  content={traitDetails?.description || ''}
+                  icon={trait.icon}
+                  facts={traitDetails?.facts}
+                  modeData={trait.modes}
+                >
+                  <div className="relative flex h-12 w-12 items-center justify-center rounded-xl border-2 border-slate-800 bg-slate-900/40">
+                    <div className="h-10 w-10 overflow-hidden rounded-lg border border-slate-700 bg-slate-900">
+                      <img src={trait.icon} alt={trait.name} className="h-full w-full object-cover" />
+                    </div>
+                  </div>
+                </Tooltip>
+              );
+            })}
+          </div>
+        </>
+      )}
     </div>
   );
 }
