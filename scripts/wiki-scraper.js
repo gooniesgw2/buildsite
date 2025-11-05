@@ -126,31 +126,53 @@ export async function enrichSkillsWithSplits(skills, options = {}) {
         enrichedSkill.wvw = mergeOverride(skill, splits.overrides.wvw);
       }
 
-      // Handle mode-exclusive facts: if a mode has exclusive facts but other split modes don't have overrides,
-      // create overrides for those modes that exclude the exclusive facts
+      // Handle mode-exclusive facts: filter out facts that are exclusive to other modes
       if (splits.split && splits.split.includes(',')) {
         const splitModes = splits.split.split(',').map(m => m.trim().toLowerCase());
 
-        // Check if PvE has exclusive facts
-        if (splits.overrides.pve && splits.overrides.pve.facts) {
-          const pveFactStatuses = new Set(
-            splits.overrides.pve.facts.map(f => f.status).filter(Boolean)
-          );
+        // Collect facts that are exclusive to each mode
+        const pveFactStatuses = new Set(
+          splits.overrides.pve?.facts?.map(f => f.status).filter(Boolean) || []
+        );
+        const pvpFactStatuses = new Set(
+          splits.overrides.pvp?.facts?.map(f => f.status).filter(Boolean) || []
+        );
+        const wvwFactStatuses = new Set(
+          splits.overrides.wvw?.facts?.map(f => f.status).filter(Boolean) || []
+        );
 
-          // Create WvW/PvP overrides that exclude PvE-only facts
-          if (splitModes.includes('wvw') || splitModes.includes('wvw pvp')) {
-            if (!enrichedSkill.wvw && skill.facts) {
-              enrichedSkill.wvw = {
-                facts: skill.facts.filter(f => !pveFactStatuses.has(f.status))
-              };
-            }
+        // Filter out mode-exclusive facts from other modes
+        if (splitModes.includes('wvw') || splitModes.includes('wvw pvp')) {
+          if (enrichedSkill.wvw && enrichedSkill.wvw.facts) {
+            // Remove PvE-exclusive and PvP-exclusive facts from WvW
+            enrichedSkill.wvw.facts = enrichedSkill.wvw.facts.filter(f => {
+              const status = f.status?.toLowerCase();
+              if (!status) return true; // Keep non-buff facts
+              // Keep if it's in WvW overrides, or not exclusive to PvE/PvP
+              return wvwFactStatuses.has(status) || (!pveFactStatuses.has(status) && !pvpFactStatuses.has(status));
+            });
+          } else if (skill.facts) {
+            // No wiki override for WvW, create one by filtering base facts
+            enrichedSkill.wvw = {
+              facts: skill.facts.filter(f => !pveFactStatuses.has(f.status?.toLowerCase()))
+            };
           }
-          if (splitModes.includes('pvp') || splitModes.includes('wvw pvp')) {
-            if (!enrichedSkill.pvp && skill.facts) {
-              enrichedSkill.pvp = {
-                facts: skill.facts.filter(f => !pveFactStatuses.has(f.status))
-              };
-            }
+        }
+
+        if (splitModes.includes('pvp') || splitModes.includes('wvw pvp')) {
+          if (enrichedSkill.pvp && enrichedSkill.pvp.facts) {
+            // Remove PvE-exclusive and WvW-exclusive facts from PvP
+            enrichedSkill.pvp.facts = enrichedSkill.pvp.facts.filter(f => {
+              const status = f.status?.toLowerCase();
+              if (!status) return true; // Keep non-buff facts
+              // Keep if it's in PvP overrides, or not exclusive to PvE/WvW
+              return pvpFactStatuses.has(status) || (!pveFactStatuses.has(status) && !wvwFactStatuses.has(status));
+            });
+          } else if (skill.facts) {
+            // No wiki override for PvP, create one by filtering base facts
+            enrichedSkill.pvp = {
+              facts: skill.facts.filter(f => !pveFactStatuses.has(f.status?.toLowerCase()))
+            };
           }
         }
       }
@@ -203,31 +225,53 @@ export async function enrichTraitsWithSplits(traits, options = {}) {
         enrichedTrait.wvw = mergeOverride(trait, splits.overrides.wvw);
       }
 
-      // Handle mode-exclusive facts: if a mode has exclusive facts but other split modes don't have overrides,
-      // create overrides for those modes that exclude the exclusive facts
+      // Handle mode-exclusive facts: filter out facts that are exclusive to other modes
       if (splits.split && splits.split.includes(',')) {
         const splitModes = splits.split.split(',').map(m => m.trim().toLowerCase());
 
-        // Check if PvE has exclusive facts
-        if (splits.overrides.pve && splits.overrides.pve.facts) {
-          const pveFactStatuses = new Set(
-            splits.overrides.pve.facts.map(f => f.status).filter(Boolean)
-          );
+        // Collect facts that are exclusive to each mode
+        const pveFactStatuses = new Set(
+          splits.overrides.pve?.facts?.map(f => f.status).filter(Boolean) || []
+        );
+        const pvpFactStatuses = new Set(
+          splits.overrides.pvp?.facts?.map(f => f.status).filter(Boolean) || []
+        );
+        const wvwFactStatuses = new Set(
+          splits.overrides.wvw?.facts?.map(f => f.status).filter(Boolean) || []
+        );
 
-          // Create WvW/PvP overrides that exclude PvE-only facts
-          if (splitModes.includes('wvw') || splitModes.includes('wvw pvp')) {
-            if (!enrichedTrait.wvw && trait.facts) {
-              enrichedTrait.wvw = {
-                facts: trait.facts.filter(f => !pveFactStatuses.has(f.status))
-              };
-            }
+        // Filter out mode-exclusive facts from other modes
+        if (splitModes.includes('wvw') || splitModes.includes('wvw pvp')) {
+          if (enrichedTrait.wvw && enrichedTrait.wvw.facts) {
+            // Remove PvE-exclusive and PvP-exclusive facts from WvW
+            enrichedTrait.wvw.facts = enrichedTrait.wvw.facts.filter(f => {
+              const status = f.status?.toLowerCase();
+              if (!status) return true; // Keep non-buff facts
+              // Keep if it's in WvW overrides, or not exclusive to PvE/PvP
+              return wvwFactStatuses.has(status) || (!pveFactStatuses.has(status) && !pvpFactStatuses.has(status));
+            });
+          } else if (trait.facts) {
+            // No wiki override for WvW, create one by filtering base facts
+            enrichedTrait.wvw = {
+              facts: trait.facts.filter(f => !pveFactStatuses.has(f.status?.toLowerCase()))
+            };
           }
-          if (splitModes.includes('pvp') || splitModes.includes('wvw pvp')) {
-            if (!enrichedTrait.pvp && trait.facts) {
-              enrichedTrait.pvp = {
-                facts: trait.facts.filter(f => !pveFactStatuses.has(f.status))
-              };
-            }
+        }
+
+        if (splitModes.includes('pvp') || splitModes.includes('wvw pvp')) {
+          if (enrichedTrait.pvp && enrichedTrait.pvp.facts) {
+            // Remove PvE-exclusive and WvW-exclusive facts from PvP
+            enrichedTrait.pvp.facts = enrichedTrait.pvp.facts.filter(f => {
+              const status = f.status?.toLowerCase();
+              if (!status) return true; // Keep non-buff facts
+              // Keep if it's in PvP overrides, or not exclusive to PvE/WvW
+              return pvpFactStatuses.has(status) || (!pveFactStatuses.has(status) && !wvwFactStatuses.has(status));
+            });
+          } else if (trait.facts) {
+            // No wiki override for PvP, create one by filtering base facts
+            enrichedTrait.pvp = {
+              facts: trait.facts.filter(f => !pveFactStatuses.has(f.status?.toLowerCase()))
+            };
           }
         }
       }
@@ -258,12 +302,17 @@ function mergeOverride(base, override) {
 
     // Apply overrides (replace facts of the same type)
     for (const overrideFact of overrideFacts) {
-      // Match by type, and optionally by text if both have text defined
+      // Match by type, and for Buff/PrefixedBuff types, also match by status
       const existingIndex = mergedFacts.findIndex(f => {
         if (f.type !== overrideFact.type) return false;
-        // If either fact has no text, match by type only
+
+        // For Buff/PrefixedBuff facts, match by status (the buff name like "alacrity", "quickness")
+        if ((f.type === 'Buff' || f.type === 'PrefixedBuff') && f.status && overrideFact.status) {
+          return f.status.toLowerCase() === overrideFact.status.toLowerCase();
+        }
+
+        // For other facts, match by text if both have it
         if (!f.text || !overrideFact.text) return true;
-        // If both have text, they must match (case-insensitive)
         return f.text.toLowerCase() === overrideFact.text.toLowerCase();
       });
 
