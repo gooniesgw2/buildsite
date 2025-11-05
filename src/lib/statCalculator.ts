@@ -420,22 +420,48 @@ function calculateInfusionStats(equipment: Equipment[]): Partial<BaseAttributes>
 /**
  * Calculate rune bonuses from 6-piece set
  * Parses rune bonus strings for flat and percentage bonuses
+ *
+ * IMPORTANT: Percentage bonuses from runes are direct percentage bonuses,
+ * not attribute bonuses. "+10% Boon Duration" adds 10 percentage points,
+ * it does NOT convert to Concentration.
  */
-function calculateRuneStats(runeItem: GW2Item | null): Partial<BaseAttributes> {
+function calculateRuneStats(runeItem: GW2Item | null): {
+  attributes: Partial<BaseAttributes>;
+  percentages: DirectPercentageBonuses
+} {
   const stats = createEmptyAttributes();
+  const percentages: DirectPercentageBonuses = {};
 
   if (!runeItem?.details?.bonuses) {
-    return stats;
+    return { attributes: stats, percentages };
   }
 
   runeItem.details.bonuses.forEach((bonus) => {
+    // Check if it's a percentage bonus
+    const percentMatch = bonus.match(/\+(\d+)%\s+(.+)/);
+    if (percentMatch) {
+      const [, valueStr, statName] = percentMatch;
+      const value = parseInt(valueStr, 10);
+      const trimmedName = statName.trim();
+
+      // Map percentage bonuses to direct percentage increases
+      if (trimmedName === 'Boon Duration') {
+        percentages.boonDuration = (percentages.boonDuration || 0) + value;
+      } else if (trimmedName === 'Condition Duration') {
+        percentages.conditionDuration = (percentages.conditionDuration || 0) + value;
+      }
+      // Ignore specific duration bonuses (Burning Duration, etc.)
+      return;
+    }
+
+    // Parse flat attribute bonuses
     const parsed = parseBonus(bonus);
     if (parsed) {
       stats[parsed.attribute] += parsed.value;
     }
   });
 
-  return stats;
+  return { attributes: stats, percentages };
 }
 
 /**
@@ -539,21 +565,21 @@ const PASSIVE_STAT_TRAITS: number[] = [
   1065, // Pet's Prowess (Ranger - Beastmastery): +300 Ferocity
   2004, // Elemental Enchantment (Elementalist - Arcane): +300 Concentration
   1788, // Reinforced Potency (Revenant - Herald): +300 Concentration
-  2418, // Inspiring Implements (Warrior - Paragon): +240 Concentration
+  2418, // Inspiring Implements (Warrior - Paragon): +180 Concentration (PvE), +60 Concentration (PvP/WvW)
   2371, // Boon of Creation (Necromancer - Ritualist): +240 Concentration
 ];
 
 /**
  * Calculate trait bonuses (passive stat bonuses only, mode-specific)
  *
- * NOTE: Mode support is implemented but none of the whitelisted passive traits
- * currently have mode-specific data. If future traits have modes, this will
- * automatically use getModeData() to get the correct stats.
+ * Uses mode-specific trait data (pve/pvp/wvw) when available, otherwise falls back
+ * to base trait facts. This ensures competitive split traits (like Inspiring Implements)
+ * use the correct values for each game mode.
  */
 function calculateTraitStats(
   selectedTraits: number[],
   allTraits: GW2Trait[],
-  _gameMode: GameMode
+  gameMode: GameMode
 ): Partial<BaseAttributes> {
   const stats = createEmptyAttributes();
 
@@ -562,14 +588,42 @@ function calculateTraitStats(
 
   passiveTraitsInBuild.forEach((traitId) => {
     const trait = allTraits.find(t => t.id === traitId);
-    if (!trait?.facts) return;
+    if (!trait) return;
+
+    // Get mode-specific facts or fall back to base facts
+    let facts: any[] | undefined;
+    switch (gameMode) {
+      case 'PvE':
+        facts = trait.pve?.facts || trait.facts;
+        break;
+      case 'PvP':
+        facts = trait.pvp?.facts || trait.facts;
+        break;
+      case 'WvW':
+        facts = trait.wvw?.facts || trait.facts;
+        break;
+      default:
+        facts = trait.facts;
+    }
+
+    if (!facts) return;
 
     // Find AttributeAdjust facts
-    const statFacts = trait.facts.filter(f => f.type === 'AttributeAdjust');
+    const statFacts = facts.filter(f => f.type === 'AttributeAdjust');
+
+    // Track which attributes we've already processed to avoid double-counting
+    // (API may return multiple AttributeAdjust facts for the same target)
+    const processedTargets = new Set<string>();
 
     statFacts.forEach((fact: any) => {
       const target = fact.target;
       const value = fact.value;
+
+      // Skip if we've already processed this target
+      if (processedTargets.has(target)) {
+        return;
+      }
+      processedTargets.add(target);
 
       // Map API target names to our AttributeKey
       const attribute = STAT_NAME_MAP[target];
@@ -749,7 +803,7 @@ export function calculateStats(
   const baseStats = { ...BASE_ATTRIBUTES };
   const equipmentStats = calculateEquipmentStats(equipment);
   const infusionStats = calculateInfusionStats(equipment);
-  const runeStats = calculateRuneStats(runeItem);
+  const runeResult = calculateRuneStats(runeItem);
   const sigilResult = calculateSigilStats(equipment, sigilItems);
 
   // Get selected trait IDs (both major and minor traits)
@@ -780,17 +834,17 @@ export function calculateStats(
   addAttributes(totalAttributes, baseStats);
   addAttributes(totalAttributes, equipmentStats);
   addAttributes(totalAttributes, infusionStats);
-  addAttributes(totalAttributes, runeStats);
+  addAttributes(totalAttributes, runeResult.attributes);
   addAttributes(totalAttributes, sigilResult.attributes);
   addAttributes(totalAttributes, traitStats);
   addAttributes(totalAttributes, skillStats);
 
-  // Collect percentage bonuses from sigils (traits/skills TODO in Phase 5-6)
+  // Collect percentage bonuses from runes and sigils
   const percentageBonuses: DirectPercentageBonuses = {
-    critChance: sigilResult.percentages.critChance,
-    boonDuration: sigilResult.percentages.boonDuration,
-    conditionDuration: sigilResult.percentages.conditionDuration,
-    critDamage: sigilResult.percentages.critDamage,
+    critChance: (sigilResult.percentages.critChance || 0),
+    boonDuration: (runeResult.percentages.boonDuration || 0) + (sigilResult.percentages.boonDuration || 0),
+    conditionDuration: (runeResult.percentages.conditionDuration || 0) + (sigilResult.percentages.conditionDuration || 0),
+    critDamage: (sigilResult.percentages.critDamage || 0),
   };
 
   // Calculate derived stats
@@ -804,7 +858,7 @@ export function calculateStats(
       base: baseStats,
       equipment: equipmentStats,
       infusions: infusionStats,
-      runes: runeStats,
+      runes: runeResult.attributes,
       sigils: sigilResult.attributes,
       traits: traitStats,
       skills: skillStats,

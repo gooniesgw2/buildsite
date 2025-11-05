@@ -66,18 +66,30 @@ export function parseSkillFacts(factsText) {
     const factParams = parseFactParams(match[1]);
     const rawGameMode = factParams['game mode'];
 
-    // Normalize game mode (lowercase, trim)
-    let gameMode = 'default';
+    const fact = buildFactObject(factParams);
+    if (!fact) continue;
+
+    // Handle game mode - can be single mode or multiple (e.g., "pvp wvw")
     if (rawGameMode) {
       const normalized = rawGameMode.toLowerCase().trim();
-      if (normalized === 'pve' || normalized === 'pvp' || normalized === 'wvw') {
-        gameMode = normalized;
-      }
-    }
+      const modes = [];
 
-    const fact = buildFactObject(factParams);
-    if (fact) {
-      facts[gameMode].push(fact);
+      if (normalized.includes('pve')) modes.push('pve');
+      if (normalized.includes('pvp')) modes.push('pvp');
+      if (normalized.includes('wvw')) modes.push('wvw');
+
+      // Add fact to each matching mode
+      if (modes.length > 0) {
+        for (const mode of modes) {
+          facts[mode].push({ ...fact }); // Clone fact for each mode
+        }
+      } else {
+        // Unknown game mode format, treat as default
+        facts.default.push(fact);
+      }
+    } else {
+      // No game mode specified, treat as default
+      facts.default.push(fact);
     }
   }
 
@@ -148,6 +160,28 @@ function buildFactObject(params) {
     fact.type = 'Number';
     fact.text = 'Number of Targets';
     fact.value = parseInt(pos[1] || params.value || 0, 10);
+  } else if (factTypeLower === 'attribute') {
+    // Handle attribute adjustments (e.g., +100 Concentration)
+    // Format: {{skill fact|attribute|AttributeName|Value|game mode=...}}
+    fact.type = 'AttributeAdjust';
+
+    // Map wiki attribute names to API target names
+    const attributeName = pos[1]?.toLowerCase();
+    const attributeMap = {
+      'concentration': 'BoonDuration',
+      'expertise': 'ConditionDuration',
+      'power': 'Power',
+      'precision': 'Precision',
+      'ferocity': 'CritDamage',
+      'toughness': 'Toughness',
+      'vitality': 'Vitality',
+      'condition damage': 'ConditionDamage',
+      'healing power': 'Healing',
+    };
+
+    fact.target = attributeMap[attributeName] || pos[1]; // Fallback to original name if not in map
+    fact.value = parseInt(pos[2] || params.value || 0, 10);
+    delete fact.text; // AttributeAdjust facts don't have text field
   } else {
     // For buffs/conditions, first positional is the buff name
     // Check if this is a linked skill (PrefixedBuff)
