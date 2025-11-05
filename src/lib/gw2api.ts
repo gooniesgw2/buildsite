@@ -377,6 +377,18 @@ class GW2ApiClient {
     return await this.fetchWithCache<GW2Specialization>(`/specializations/${id}`);
   }
 
+  // Get all traits from static data
+  async getAllTraits(): Promise<GW2TraitWithModes[]> {
+    await this.loadStaticData();
+    return this.staticData.traits || [];
+  }
+
+  // Get all specializations from static data
+  async getAllSpecializations(): Promise<GW2Specialization[]> {
+    await this.loadStaticData();
+    return this.staticData.specializations || [];
+  }
+
   // Fetch item stats
   async getItemStats(): Promise<GW2ItemStat[]> {
     const allStatIds = await this.fetchWithCache<number[]>('/itemstats');
