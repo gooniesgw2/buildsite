@@ -25,6 +25,7 @@ import type {
   GW2Item,
   GW2Trait,
   GW2Skill,
+  GW2Specialization,
   BuildData,
 } from '../types/gw2';
 import {
@@ -438,51 +439,187 @@ function calculateRuneStats(runeItem: GW2Item | null): Partial<BaseAttributes> {
 }
 
 /**
- * Calculate sigil bonuses (flat bonuses only)
- * TODO: Implement sigil whitelist and parsing
+ * Sigil item IDs that provide direct percentage bonuses (not attributes)
+ * These add directly to derived stats like crit chance %, boon duration %, etc.
+ */
+const SIGIL_DIRECT_PERCENTAGE_BONUSES: Record<number, Partial<DirectPercentageBonuses>> = {
+  24618: { critChance: 7 },         // Superior Sigil of Accuracy: +7% Crit Chance
+  72339: { boonDuration: 10 },      // Superior Sigil of Concentration: +10% Boon Duration
+  44950: { conditionDuration: 10 }, // Superior Sigil of Malice: +10% Condition Duration
+};
+
+/**
+ * Calculate sigil bonuses (flat/passive bonuses only)
+ *
+ * Includes:
+ * - Superior Sigil of Accuracy: +7% Crit Chance
+ * - Superior Sigil of Concentration: +10% Boon Duration
+ * - Superior Sigil of Malice: +10% Condition Duration
+ *
+ * Excludes:
+ * - Stacking sigils (Perception, Bounty, Cruelty, Stars, etc.)
+ * - Conditional sigils (on-kill, on-crit, on-swap, etc.)
+ * - Multiplicative damage sigils (Force, Bursting)
+ *
+ * @returns Object with both attribute bonuses and direct percentage bonuses
  */
 function calculateSigilStats(
-  _equipment: Equipment[],
+  equipment: Equipment[],
   _sigilItems: Map<number, GW2Item>
-): Partial<BaseAttributes> {
-  const stats = createEmptyAttributes();
+): { attributes: Partial<BaseAttributes>; percentages: DirectPercentageBonuses } {
+  const attributes = createEmptyAttributes();
+  const percentages: DirectPercentageBonuses = {};
 
-  // TODO: Phase 4 - Implement sigil parsing
-  // For now, return empty stats
+  // Collect all sigil IDs from equipment (weapon set 1 only)
+  const sigilIds = new Set<number>();
+  equipment.forEach((item) => {
+    // Skip Weapon Set 2 (consistent with other calculations)
+    if (item.slot === 'MainHand2' || item.slot === 'OffHand2') {
+      return;
+    }
 
-  return stats;
+    if (item.sigil1Id) sigilIds.add(item.sigil1Id);
+    if (item.sigil2Id) sigilIds.add(item.sigil2Id);
+  });
+
+  // Apply bonuses from each sigil
+  sigilIds.forEach((sigilId) => {
+    // Check for direct percentage bonuses
+    const percentageBonus = SIGIL_DIRECT_PERCENTAGE_BONUSES[sigilId];
+    if (percentageBonus) {
+      if (percentageBonus.critChance) {
+        percentages.critChance = (percentages.critChance || 0) + percentageBonus.critChance;
+      }
+      if (percentageBonus.boonDuration) {
+        percentages.boonDuration = (percentages.boonDuration || 0) + percentageBonus.boonDuration;
+      }
+      if (percentageBonus.conditionDuration) {
+        percentages.conditionDuration = (percentages.conditionDuration || 0) + percentageBonus.conditionDuration;
+      }
+      if (percentageBonus.critDamage) {
+        percentages.critDamage = (percentages.critDamage || 0) + percentageBonus.critDamage;
+      }
+    }
+
+    // Future: Check for attribute bonuses (none currently exist for passive sigils)
+    // If we find any, parse them here similar to runes
+  });
+
+  return { attributes, percentages };
 }
 
 /**
+ * Whitelist of trait IDs that provide passive stat bonuses (no conditions)
+ * Only includes traits where the stat bonus is always active
+ *
+ * Excluded: Conditional bonuses (weapon-specific, boon-dependent, combat state, etc.)
+ *
+ * MAINTENANCE NOTE:
+ * - This list may need updates after balance patches
+ * - To find new passive traits, run: node scripts/audit-passive-traits.js
+ * - To verify a trait is passive, check its description for conditional keywords:
+ *   "while", "when", "wielding", "above", "below", "against", "per", "each"
+ * - Future improvement: Move this to public/data/passive-traits.json for easier updates
+ */
+const PASSIVE_STAT_TRAITS: number[] = [
+  // Major traits (manually selected)
+  1801, // Seething Malice (Revenant - Corruption): +360 Condition Damage
+  2028, // Soothing Power (Elementalist - Water): +300 Vitality
+  325,  // Burning Rage (Elementalist - Fire): +180 Condition Damage
+  1232, // Preparedness (Thief - Trickery): +150 Expertise
+  1938, // Gathered Focus (Elementalist - Tempest): +360 Concentration
+  861,  // Vital Persistence (Necromancer - Soul Reaping): +180 Vitality
+  2190, // Power for Power (Guardian - Willbender): +120 Power
+
+  // Minor traits (automatically granted by specializations)
+  1896, // Defender's Dogma (Guardian - Dragonhunter): +180 Vitality
+  2394, // Light's Gift (Guardian - Luminary): +180 Vitality
+  1059, // Lingering Magic (Ranger - Nature Magic): +360 Concentration
+  413,  // Compounding Chemicals (Engineer - Alchemy): +360 Concentration
+  1065, // Pet's Prowess (Ranger - Beastmastery): +300 Ferocity
+  2004, // Elemental Enchantment (Elementalist - Arcane): +300 Concentration
+  1788, // Reinforced Potency (Revenant - Herald): +300 Concentration
+  2418, // Inspiring Implements (Warrior - Paragon): +240 Concentration
+  2371, // Boon of Creation (Necromancer - Ritualist): +240 Concentration
+];
+
+/**
  * Calculate trait bonuses (passive stat bonuses only, mode-specific)
- * TODO: Implement trait parsing with mode support
+ *
+ * NOTE: Mode support is implemented but none of the whitelisted passive traits
+ * currently have mode-specific data. If future traits have modes, this will
+ * automatically use getModeData() to get the correct stats.
  */
 function calculateTraitStats(
-  _selectedTraits: number[],
-  _allTraits: GW2Trait[],
+  selectedTraits: number[],
+  allTraits: GW2Trait[],
   _gameMode: GameMode
 ): Partial<BaseAttributes> {
   const stats = createEmptyAttributes();
 
-  // TODO: Phase 5 - Implement trait parsing
-  // For now, return empty stats
+  // Filter for passive traits that are selected
+  const passiveTraitsInBuild = selectedTraits.filter(id => PASSIVE_STAT_TRAITS.includes(id));
+
+  passiveTraitsInBuild.forEach((traitId) => {
+    const trait = allTraits.find(t => t.id === traitId);
+    if (!trait?.facts) return;
+
+    // Find AttributeAdjust facts
+    const statFacts = trait.facts.filter(f => f.type === 'AttributeAdjust');
+
+    statFacts.forEach((fact: any) => {
+      const target = fact.target;
+      const value = fact.value;
+
+      // Map API target names to our AttributeKey
+      const attribute = STAT_NAME_MAP[target];
+      if (attribute && value) {
+        stats[attribute] = (stats[attribute] || 0) + value;
+      }
+    });
+  });
 
   return stats;
 }
 
 /**
+ * Signet passive stat bonuses (level 80)
+ *
+ * NOTE: The GW2 API does not expose signet passive bonuses via AttributeAdjust facts.
+ * These values are hardcoded based on the GW2 Wiki (formula: 20 + 2 * level = 180 at level 80).
+ *
+ * Excluded: Superconducting Signet (provides % damage modifier, not attribute bonus)
+ * Excluded: Healing signets (provide healing effects, not flat attribute bonuses)
+ */
+const SIGNET_PASSIVE_STAT_BONUSES: Record<number, { attribute: AttributeKey; value: number }> = {
+  9151: { attribute: 'ConditionDamage', value: 180 }, // Signet of Wrath (Guardian)
+  14404: { attribute: 'Power', value: 180 },          // Signet of Might (Warrior)
+  14410: { attribute: 'Precision', value: 180 },      // Signet of Fury (Warrior)
+  12491: { attribute: 'Ferocity', value: 180 },       // Signet of the Wild (Ranger)
+  13046: { attribute: 'Power', value: 180 },          // Assassin's Signet (Thief)
+  13062: { attribute: 'Precision', value: 180 },      // Signet of Agility (Thief)
+};
+
+/**
  * Calculate skill bonuses (passive signet bonuses only, mode-specific)
- * TODO: Implement skill parsing with mode support
+ *
+ * NOTE: Mode support is implemented but none of the whitelisted signets
+ * currently have mode-specific data. If future signets have modes, this will
+ * automatically use getModeData() to get the correct stats.
  */
 function calculateSkillStats(
-  _selectedSkills: number[],
+  selectedSkills: number[],
   _allSkills: GW2Skill[],
   _gameMode: GameMode
 ): Partial<BaseAttributes> {
   const stats = createEmptyAttributes();
 
-  // TODO: Phase 6 - Implement skill parsing
-  // For now, return empty stats
+  selectedSkills.forEach((skillId) => {
+    const bonus = SIGNET_PASSIVE_STAT_BONUSES[skillId];
+    if (bonus) {
+      stats[bonus.attribute] = (stats[bonus.attribute] || 0) + bonus.value;
+    }
+  });
 
   return stats;
 }
@@ -576,6 +713,7 @@ export function calculateStats(
   runeItem: GW2Item | null,
   sigilItems: Map<number, GW2Item>,
   allTraits: GW2Trait[],
+  allSpecs: GW2Specialization[],
   allSkills: GW2Skill[]
 ): CalculatedStats {
   const { profession, equipment, gameMode, traits, skills } = buildData;
@@ -612,13 +750,24 @@ export function calculateStats(
   const equipmentStats = calculateEquipmentStats(equipment);
   const infusionStats = calculateInfusionStats(equipment);
   const runeStats = calculateRuneStats(runeItem);
-  const sigilStats = calculateSigilStats(equipment, sigilItems);
+  const sigilResult = calculateSigilStats(equipment, sigilItems);
 
-  // Get selected trait IDs
+  // Get selected trait IDs (both major and minor traits)
   const selectedTraitIds: number[] = [];
+
+  // Add manually selected major traits
   if (traits.spec1Choices) selectedTraitIds.push(...traits.spec1Choices.filter((id): id is number => id !== null));
   if (traits.spec2Choices) selectedTraitIds.push(...traits.spec2Choices.filter((id): id is number => id !== null));
   if (traits.spec3Choices) selectedTraitIds.push(...traits.spec3Choices.filter((id): id is number => id !== null));
+
+  // Add minor traits from selected specializations
+  const selectedSpecIds = [traits.spec1, traits.spec2, traits.spec3].filter((id): id is number => id !== undefined);
+  selectedSpecIds.forEach((specId) => {
+    const spec = allSpecs.find(s => s.id === specId);
+    if (spec?.minor_traits) {
+      selectedTraitIds.push(...spec.minor_traits);
+    }
+  });
 
   // Get selected skill IDs
   const selectedSkillIds: number[] = Object.values(skills).filter((id): id is number => id !== null && id !== undefined);
@@ -632,12 +781,17 @@ export function calculateStats(
   addAttributes(totalAttributes, equipmentStats);
   addAttributes(totalAttributes, infusionStats);
   addAttributes(totalAttributes, runeStats);
-  addAttributes(totalAttributes, sigilStats);
+  addAttributes(totalAttributes, sigilResult.attributes);
   addAttributes(totalAttributes, traitStats);
   addAttributes(totalAttributes, skillStats);
 
-  // TODO: Collect percentage bonuses from runes/sigils/traits/skills in Phase 4-6
-  const percentageBonuses: DirectPercentageBonuses = {};
+  // Collect percentage bonuses from sigils (traits/skills TODO in Phase 5-6)
+  const percentageBonuses: DirectPercentageBonuses = {
+    critChance: sigilResult.percentages.critChance,
+    boonDuration: sigilResult.percentages.boonDuration,
+    conditionDuration: sigilResult.percentages.conditionDuration,
+    critDamage: sigilResult.percentages.critDamage,
+  };
 
   // Calculate derived stats
   const hasShield = hasShieldEquipped(equipment);
@@ -651,7 +805,7 @@ export function calculateStats(
       equipment: equipmentStats,
       infusions: infusionStats,
       runes: runeStats,
-      sigils: sigilStats,
+      sigils: sigilResult.attributes,
       traits: traitStats,
       skills: skillStats,
       percentageBonuses,

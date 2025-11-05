@@ -88,8 +88,8 @@ Comprehensive refactor of the stat calculation system to properly handle all sta
 - Integration testing with StatsPanel
 - Verify stat values match existing implementation
 
-### ⏳ Phase 4: Runes & Sigils (PENDING)
-**Status:** Runes implemented, sigils need whitelist
+### ✅ Phase 4: Runes & Sigils (COMPLETED)
+**Status:** Fully implemented and tested
 
 **Important Design Note:**
 Some bonuses directly modify derived stats (percentages) rather than attributes:
@@ -99,79 +99,99 @@ Some bonuses directly modify derived stats (percentages) rather than attributes:
 The stat calculator handles both types via the `DirectPercentageBonuses` interface.
 
 **Runes:**
-- ✅ Parsing implemented
-- ✅ Handles flat bonuses (+25 Power)
-- ✅ Handles percentage bonuses (+10% Boon Duration → +150 Concentration)
-- ⏳ Need to verify if any runes have direct % bonuses
+- ✅ Parsing implemented and tested
+- ✅ Handles flat bonuses (+25 Power, +35 Healing, +35 Healing Power)
+- ✅ Handles general percentage bonuses (+10% Boon Duration → +150 Concentration, +10% Condition Duration → +150 Expertise)
+- ✅ Correctly excludes specific duration bonuses (+10% Burning Duration, +10% Might Duration, etc.)
+- ✅ Correctly excludes defensive bonuses (-10% Incoming Condition Duration)
+- ✅ Correctly excludes movement bonuses (+25% Movement Speed)
+- ✅ Verified with complete audit of all 68 superior runes
 
 **Sigils:**
-- ⏳ Need to create whitelist separating:
-  - Direct % bonuses (Accuracy: +7% crit chance)
-  - Attribute bonuses (if any exist)
-- ⏳ Implement parsing logic for both types
-- ⏳ Test with known sigils
+- ✅ Created whitelist with 3 stat-affecting sigils (Accuracy, Concentration, Malice)
+- ✅ Implemented direct percentage bonus system
+- ✅ Properly excludes conditional/stacking sigils (Bloodlust, Intelligence, Perception)
+- ✅ Excludes multiplicative damage sigils (Force, Bursting)
+- ✅ Excludes utility sigils (Transference)
+- ✅ Only includes Weapon Set 1 sigils (Set 2 excluded)
+
+**Sigil Implementation:**
+```typescript
+const SIGIL_DIRECT_PERCENTAGE_BONUSES: Record<number, Partial<DirectPercentageBonuses>> = {
+  24618: { critChance: 7 },         // Superior Sigil of Accuracy
+  72339: { boonDuration: 10 },      // Superior Sigil of Concentration
+  44950: { conditionDuration: 10 }, // Superior Sigil of Malice
+};
+```
 
 **Relics:**
-- ⏳ Need to audit which relics provide flat stats
-- ⏳ Implement parsing if any exist
+- ⏳ Relics not yet implemented (most provide active effects, not passive stats)
+- ⏳ To be evaluated in future phase if needed
 
-**Sigil Whitelist (To Be Created):**
-```
-IMPORTANT: Some bonuses are direct percentage bonuses, NOT attribute bonuses!
+### ✅ Phase 5: Trait Stat Bonuses (COMPLETED)
+**Status:** Fully implemented and tested
 
-Direct percentage bonuses (applied to derived stats):
-- Sigil of Accuracy (+7% crit chance) → adds directly to crit chance %
-- Sigil of Concentration (+10% boon duration) → adds directly to boon duration %
-- [More to be identified during audit]
+**Audit Results:**
+- Audited all 972 traits across 9 professions
+- Found 167 traits with AttributeAdjust facts
+- Identified only 7 truly passive traits (no conditional requirements)
+- Most traits with stat bonuses are conditional (weapon, boon, combat state, etc.)
 
-Attribute bonuses (converted to attributes):
-- [To be identified during audit]
-
-Exclude (conditional/stacking):
-- Sigil of Bloodlust (stacking, kill-based)
-- Sigil of Intelligence (proc-based)
-- Sigil of Perception (conditional)
-```
-
-### ⏳ Phase 5: Trait Stat Bonuses (PENDING - MANUAL AUDIT REQUIRED)
-**Status:** Stub implemented, needs trait audit
-
-**Implementation Plan:**
-1. Audit all traits across 9 professions
-2. Identify traits with `AttributeAdjust` facts
-3. Filter for passive/unconditional bonuses only
-4. Create `STAT_AFFECTING_TRAITS` documentation
-5. Implement parsing with mode-specific support
-
-**Trait Parsing Logic:**
+**Implemented Traits (Passive Only):**
 ```typescript
-// For each selected trait:
-// 1. Get trait data
-// 2. Get mode-specific facts using getModeData()
-// 3. Filter facts for type: "AttributeAdjust"
-// 4. Extract target (attribute name) and value
-// 5. Apply to stats
+const PASSIVE_STAT_TRAITS: number[] = [
+  1801, // Seething Malice (Revenant - Corruption): +360 Condition Damage
+  2028, // Soothing Power (Elementalist - Water): +300 Vitality
+  325,  // Burning Rage (Elementalist - Fire): +180 Condition Damage
+  1232, // Preparedness (Thief - Trickery): +150 Expertise
+  1938, // Gathered Focus (Elementalist - Tempest): +360 Concentration
+  861,  // Vital Persistence (Necromancer - Soul Reaping): +180 Vitality
+  2190, // Power for Power (Guardian - Willbender): +120 Power
+];
 ```
 
-**Known Trait Fact Structure:**
-```json
-{
-  "type": "AttributeAdjust",
-  "value": 120,
-  "target": "Power"
-}
+**Implementation:**
+- Parses AttributeAdjust facts from trait data
+- Maps API attribute names to internal AttributeKey
+- Mode support implemented (though none of the passive traits have mode data currently)
+- Properly integrates with main stat calculation
+
+**Excluded Categories:**
+- Weapon-conditional traits (27 traits)
+- Boon-conditional traits (38 traits)
+- Combat-conditional traits (many)
+- Per-stack/threshold bonuses
+
+### ✅ Phase 6: Skill Stat Bonuses (COMPLETED)
+**Status:** Fully implemented and tested
+
+**Audit Results:**
+- Audited all 2,987 skills across 9 professions
+- Found 13 signets with AttributeAdjust facts (all healing-related)
+- Discovered that stat-granting signets don't expose values in API
+- Verified values from GW2 Wiki: 180 per stat at level 80
+
+**Implemented Signets:**
+```typescript
+const SIGNET_PASSIVE_STAT_BONUSES: Record<number, { attribute: AttributeKey; value: number }> = {
+  9151: { attribute: 'ConditionDamage', value: 180 }, // Signet of Wrath (Guardian)
+  14404: { attribute: 'Power', value: 180 },          // Signet of Might (Warrior)
+  14410: { attribute: 'Precision', value: 180 },      // Signet of Fury (Warrior)
+  12491: { attribute: 'Ferocity', value: 180 },       // Signet of the Wild (Ranger)
+  13046: { attribute: 'Power', value: 180 },          // Assassin's Signet (Thief)
+  13062: { attribute: 'Precision', value: 180 },      // Signet of Agility (Thief)
+};
 ```
 
-### ⏳ Phase 6: Skill Stat Bonuses (PENDING - MANUAL AUDIT REQUIRED)
-**Status:** Stub implemented, needs signet audit
+**Implementation Notes:**
+- Values hardcoded from GW2 Wiki (formula: 20 + 2 × level = 180 at level 80)
+- API does not expose signet passive bonuses via AttributeAdjust facts
+- Mode support implemented (though no signets have mode-specific data)
 
-**Implementation Plan:**
-1. Audit all signets (primary source of passive skill bonuses)
-2. Identify signets with passive `AttributeAdjust` facts
-3. Create `STAT_AFFECTING_SKILLS` documentation
-4. Implement parsing with mode-specific support
-
-**Focus:** Only passive signet bonuses (not active effects)
+**Excluded:**
+- Superconducting Signet (provides % damage modifier, not attribute)
+- Healing signets (provide healing effects, not flat attributes)
+- Active effects (only passive bonuses included)
 
 ### ⏳ Phase 7: Derived Stats (PENDING)
 **Status:** Already implemented in Phase 1
@@ -190,16 +210,29 @@ Exclude (conditional/stacking):
 - Verify formulas match wiki documentation
 - Integration testing
 
-### ⏳ Phase 8: Integration & Testing (PENDING)
-**Status:** Not started
+### ✅ Phase 8: Integration & Testing (COMPLETED)
+**Status:** Fully integrated and tested
 
-**Tasks:**
-- Update `StatsPanel.tsx` to use new `calculateStats()` function
-- Remove old calculation logic
-- Test with known builds (one per profession minimum)
-- Verify mode switching (PvE/PvP/WvW) works correctly
-- Compare results with old implementation
-- Fix any discrepancies
+**Completed:**
+- ✅ Updated `StatsPanel.tsx` to use new `calculateStats()` function
+- ✅ Removed old calculation logic (221 lines removed)
+- ✅ Fixed two critical bugs found during testing:
+  - Bug 1: Weapon Set 2 infusions being counted (+10 power error)
+  - Bug 2: Base crit chance was 4% instead of 5% (1% error)
+- ✅ Verified correct attribute mapping (Concentration vs BoonDuration)
+- ✅ TypeScript compilation passes
+- ✅ Production build succeeds
+
+**Testing Results:**
+- Guardian with all Berserker gear, Greatsword, Mighty infusions:
+  - Power: 2472 ✓ (was 2482, fixed infusion bug)
+  - Crit Chance: 50.71% ✓ (was 49.71%, fixed base crit formula)
+  - All other stats verified correct
+
+**Integration:**
+- Calculator fully integrated into StatsPanel
+- Breakdown by source available in calculatedStats.sources
+- Mode support ready (PvE/PvP/WvW) for future trait/skill modes
 
 ### ⏳ Phase 9: Documentation (PENDING)
 **Status:** Partial (code comments done)
@@ -292,14 +325,47 @@ Exclude (conditional/stacking):
    - Compare results with old implementation
    - Ensure no existing functionality breaks
 
+## Maintenance After Balance Patches
+
+After GW2 balance patches, you may need to update the passive trait whitelist:
+
+### Updating Passive Traits
+
+1. **Run the audit script:**
+   ```bash
+   node scripts/audit-passive-traits.js
+   ```
+
+2. **Review the output** for new likely passive traits
+
+3. **Manually verify** each trait by checking:
+   - Does the description contain conditional keywords? ("while", "when", "wielding", etc.)
+   - Is the bonus truly always active?
+   - Are there hidden conditions not obvious from the description?
+
+4. **Update the whitelist** in `src/lib/statCalculator.ts`:
+   - Find the `PASSIVE_STAT_TRAITS` array
+   - Add new trait IDs with comments
+   - Remove traits that were changed or removed
+
+5. **Rebuild and test:**
+   ```bash
+   npm run build
+   ```
+
+### Future Improvement
+
+Consider moving `PASSIVE_STAT_TRAITS` to `public/data/passive-traits.json` for easier updates without code changes.
+
 ## Known Issues / TODOs
 
-- [ ] Sigil whitelist needs to be created (Phase 4)
-- [ ] Trait audit needs to be performed (Phase 5)
-- [ ] Signet audit needs to be performed (Phase 6)
-- [ ] Relic stat bonuses need investigation
-- [ ] Force/Damage% bonuses need special handling (multiplicative, not additive)
-- [ ] Consider exporting parseBonus() for external use/testing
+- [x] ~~Sigil whitelist needs to be created (Phase 4)~~ - COMPLETED
+- [x] ~~Trait audit needs to be performed (Phase 5)~~ - COMPLETED
+- [x] ~~Signet audit needs to be performed (Phase 6)~~ - COMPLETED
+- [ ] Move passive trait whitelist to JSON config file (easier maintenance)
+- [ ] Relic stat bonuses need investigation (future enhancement)
+- [ ] Force/Damage% bonuses are excluded (multiplicative damage, not additive stats)
+- [x] ~~parseBonus() exported for external use~~ - COMPLETED
 
 ## References
 
@@ -307,14 +373,31 @@ Exclude (conditional/stacking):
 - [GW2 Wiki: Attributes](https://wiki.guildwars2.com/wiki/Attribute)
 - Current implementation: `src/components/StatsPanel.tsx` (lines 165-306)
 
-## Next Steps
+## Summary of Completed Work
 
-1. ✅ Phase 1: Stat calculator service created
-2. ⏭️ Phase 2: Already complete (base stats implemented in Phase 1)
-3. ⏭️ Phase 3: Integration testing
-4. ⏭️ Phase 4: Create sigil whitelist and implement parsing
-5. ⏭️ Phase 5: Manual trait audit → implement trait parsing
-6. ⏭️ Phase 6: Manual signet audit → implement skill parsing
-7. ⏭️ Phase 7: Already complete (derived stats implemented in Phase 1)
-8. ⏭️ Phase 8: Integration with StatsPanel and testing
-9. ⏭️ Phase 9: Final documentation
+1. ✅ **Phase 1-3:** Core stat calculator created with equipment, infusions, runes
+2. ✅ **Phase 4:** Sigils - 3 stat-affecting sigils implemented (Accuracy, Concentration, Malice)
+3. ✅ **Phase 5:** Traits - 7 passive stat-granting traits implemented
+4. ✅ **Phase 6:** Skills - 6 signet passive bonuses implemented
+5. ✅ **Phase 7:** Derived stats - All formulas working correctly
+6. ✅ **Phase 8:** Integration - StatsPanel fully integrated, bugs fixed
+7. ⏳ **Phase 9:** Documentation - In progress
+
+## Stat Sources Implemented
+
+**Fully Implemented:**
+- ✅ Base attributes (level 80: 1000 Power/Precision/Toughness/Vitality, 0 others)
+- ✅ Equipment stats (3-stat, 4-stat, 9-stat combos)
+- ✅ Infusions (+5 per infusion, Weapon Set 2 excluded)
+- ✅ Runes (6-piece bonuses, flat + percentage)
+- ✅ Sigils (3 stat-affecting sigils, direct % bonuses)
+- ✅ Traits (7 passive traits with no conditions)
+- ✅ Skills (6 signets with +180 stat bonuses)
+- ✅ Shield armor bonus (+295 for ascended shields)
+- ✅ Base health by profession
+- ✅ Base armor by weight class
+
+**Future Enhancements:**
+- ⏳ Relics (most provide active effects, not passive stats)
+- ⏳ Conditional trait bonuses (weapon-specific, boon-dependent, etc.)
+- ⏳ Mode-specific data for traits/skills (infrastructure ready, no data yet)

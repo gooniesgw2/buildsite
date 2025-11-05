@@ -68,17 +68,31 @@ export default function StatsPanel() {
     }
   }, [buildData.equipment]);
 
+  // Load trait and specialization data for stat calculations
+  const [allTraits, setAllTraits] = useState<any[]>([]);
+  const [allSpecs, setAllSpecs] = useState<any[]>([]);
+
+  useEffect(() => {
+    Promise.all([
+      gw2Api.getAllTraits(),
+      gw2Api.getAllSpecializations()
+    ]).then(([traits, specs]) => {
+      setAllTraits(traits);
+      setAllSpecs(specs);
+    }).catch(console.error);
+  }, []);
+
   // Calculate all stats using the new stat calculator
   const calculatedStats = useMemo(() => {
-    // TODO: Load all traits and skills when implementing Phase 5-6
     return calculateStats(
       buildData as import('../types/gw2').BuildData,
       runeItem,
       sigilItems,
-      [], // allTraits - TODO: Phase 5
+      allTraits,
+      allSpecs,
       []  // allSkills - TODO: Phase 6
     );
-  }, [buildData, runeItem, sigilItems]);
+  }, [buildData, runeItem, sigilItems, allTraits, allSpecs]);
 
   // Helper to get derived stat display for an attribute
   const getDerivedStat = (attributeKey: AttributeKey): { label: string; value: string } | null => {
