@@ -67,13 +67,15 @@ export async function generateDiscordMarkdown(build: BuildData, shareUrl: string
 
 /**
  * Generate in-game chat link (template code)
- * Note: This is a placeholder - actual GW2 chat codes use a specific binary format
  */
-export function generateChatLink(_build: BuildData): string {
-  // GW2 chat links are complex binary structures
-  // For now, we'll return a placeholder
-  // A full implementation would need to encode the build according to GW2's chat link spec
-  return '[Build Template Code - Not yet implemented]';
+export async function generateChatLink(build: BuildData): Promise<string> {
+  try {
+    const { exportToChatCode } = await import('./chatCodeConverter');
+    return await exportToChatCode(build);
+  } catch (error) {
+    console.error('Failed to generate chat code:', error);
+    throw new Error('Failed to generate chat code: ' + (error instanceof Error ? error.message : String(error)));
+  }
 }
 
 /**

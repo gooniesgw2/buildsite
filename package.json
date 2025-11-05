@@ -11,6 +11,8 @@
     "update-data": "node scripts/fetch-static-data.js"
   },
   "dependencies": {
+    "buffer": "^6.0.3",
+    "gw2buildlink": "^0.1.0",
     "pako": "^2.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
