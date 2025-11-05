@@ -1,0 +1,42 @@
+.gw2a--1FcDa {
+  line-height: 1.15;
+}
+.gw2a--1FcDa * {
+  box-sizing: border-box;
+}
+.gw2a--3ZW5E * {
+  box-sizing: border-box;
+}
+@font-face {
+  font-family: 'Menomonia';
+  src: url(menomonia.4fb5a472.woff) format('woff'), url(menomonia.40be9640.ttf) format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'Open Sans';
+  src: url(opensans-light.1bf71be1.ttf) format('truetype');
+  font-weight: 100;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'Open Sans';
+  src: url(opensans.629a55a7.ttf) format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'Open Sans';
+  src: url(opensans-semibold.e1c83f94.ttf) format('truetype');
+  font-weight: bold;
+  font-style: normal;
+}
+.gw2a--3lXGh {
+  display: inline-block;
+}
+.gw2a--11rU1 {
+  display: inline-block;
+}
+.gw2a--3u_DO {
+  display: inline-block;
+}

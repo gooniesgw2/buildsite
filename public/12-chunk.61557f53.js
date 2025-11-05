@@ -1,0 +1,1 @@
+webpackJsonp([12],{199:function(e,a,r){"use strict";Object.defineProperty(a,"__esModule",{value:!0}),function(e){var a=r(3),t=r.n(a);storiesOf("Character",e).add("default",function(){return t.a.createElement(ArmoryEmbed,{name:"character","data-armory-name":"Quartermile"})})}.call(a,r(48)(e))}});

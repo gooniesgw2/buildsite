@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useBuildStore } from '../store/buildStore';
-import { getShareableUrl, type BuildUrlFormat } from '../lib/buildEncoder';
+import { getShareableUrl } from '../lib/buildEncoder';
 import { generateChatLink } from '../lib/buildExport';
 import { importFromChatCode } from '../lib/chatCodeConverter';
 
@@ -13,10 +13,10 @@ export default function BuildExport() {
   const [importError, setImportError] = useState<string | null>(null);
   const [importSuccess, setImportSuccess] = useState(false);
 
-  const handleCopyUrl = async (format: BuildUrlFormat) => {
-    const url = await getShareableUrl(buildData as any, format);
+  const handleCopyUrl = () => {
+    const url = getShareableUrl(buildData as any);
     navigator.clipboard.writeText(url);
-    setCopied(format);
+    setCopied('url');
     setTimeout(() => setCopied(null), 2000);
   };
 
@@ -84,33 +84,18 @@ export default function BuildExport() {
               <h3 className="text-base font-semibold text-white">Shareable link</h3>
               <p className="text-sm text-slate-400">Generate a URL to share this build.</p>
             </div>
-            <div className="flex flex-col gap-2">
-              <button
-                onClick={() => handleCopyUrl('compressed')}
-                className="flex items-center justify-between rounded-xl border border-slate-700 bg-slate-900/60 px-4 py-3 text-left transition hover:border-slate-600 hover:bg-slate-900"
-              >
-                <div className="flex-1">
-                  <div className="text-sm font-semibold text-slate-200">Compressed (shortest)</div>
-                  <div className="text-xs text-slate-500">Binary encoded, smallest URL size</div>
-                </div>
-                <span className="ml-3 rounded-full border border-sky-500/60 bg-sky-500/10 px-3 py-1 text-xs font-semibold text-sky-200">
-                  {copied === 'compressed' ? '✓ Copied' : 'Copy'}
-                </span>
-              </button>
-
-              <button
-                onClick={() => handleCopyUrl('readable')}
-                className="flex items-center justify-between rounded-xl border border-slate-700 bg-slate-900/60 px-4 py-3 text-left transition hover:border-slate-600 hover:bg-slate-900"
-              >
-                <div className="flex-1">
-                  <div className="text-sm font-semibold text-slate-200">Human-readable</div>
-                  <div className="text-xs text-slate-500">Query params with trait/skill IDs visible</div>
-                </div>
-                <span className="ml-3 rounded-full border border-sky-500/60 bg-sky-500/10 px-3 py-1 text-xs font-semibold text-sky-200">
-                  {copied === 'readable' ? '✓ Copied' : 'Copy'}
-                </span>
-              </button>
-            </div>
+            <button
+              onClick={handleCopyUrl}
+              className="flex w-full items-center justify-between rounded-xl border border-slate-700 bg-slate-900/60 px-4 py-3 text-left transition hover:border-slate-600 hover:bg-slate-900"
+            >
+              <div className="flex-1">
+                <div className="text-sm font-semibold text-slate-200">Copy URL</div>
+                <div className="text-xs text-slate-500">Binary encoded, smallest URL size</div>
+              </div>
+              <span className="ml-3 rounded-full border border-sky-500/60 bg-sky-500/10 px-3 py-1 text-xs font-semibold text-sky-200">
+                {copied === 'url' ? '✓ Copied' : 'Copy'}
+              </span>
+            </button>
           </div>
 
           <div className="rounded-2xl border border-slate-800 bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-slate-900/70 p-5">

@@ -13,13 +13,10 @@ function App() {
 
   // Load build from URL on mount
   useEffect(() => {
-    const loadFromUrl = async () => {
-      const buildData = await loadBuildFromUrl();
-      if (buildData) {
-        loadBuild(buildData);
-      }
-    };
-    loadFromUrl();
+    const buildData = loadBuildFromUrl();
+    if (buildData) {
+      loadBuild(buildData);
+    }
   }, [loadBuild]);
 
   return (

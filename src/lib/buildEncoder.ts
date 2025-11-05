@@ -7,6 +7,12 @@ const PROFESSIONS = ['Guardian', 'Warrior', 'Engineer', 'Ranger', 'Thief', 'Elem
 const GAME_MODES = ['PvE', 'PvP', 'WvW'];
 // Equipment slots (4 bits, 0-15)
 const SLOTS = ['Helm', 'Shoulders', 'Coat', 'Gloves', 'Leggings', 'Boots', 'Amulet', 'Ring1', 'Ring2', 'Accessory1', 'Accessory2', 'Backpack', 'MainHand1', 'OffHand1', 'MainHand2', 'OffHand2'];
+// Stat combinations (6 bits, 0-63)
+const STATS = ['Berserker', 'Assassin', 'Harrier', 'Commander', 'Minstrel', 'Marauder', 'Marshal', 'Viper', 'Sinister', 'Grieving', 'Trailblazer', 'Seraph', 'Celestial', 'Diviner', 'Vigilant', 'Crusader', 'Wanderer', 'Nomad', 'Sentinel', 'Dire', 'Rabid', 'Magi', 'Apothecary', 'Cleric', 'Giver', 'Knight', 'Cavalier', 'Soldier', 'Shaman', 'Settler', 'Zealot', 'Valkyrie', 'Rampager', 'Carrion', 'Sinister', 'Plaguedoctor', 'Ritualist', 'Dragon', 'Spellbreaker', 'Wanderer'];
+// Weapon types (5 bits, 0-31)
+const WEAPONS = ['Greatsword', 'Hammer', 'Longbow', 'Rifle', 'Short Bow', 'Staff', 'Axe', 'Dagger', 'Mace', 'Pistol', 'Scepter', 'Sword', 'Focus', 'Shield', 'Torch', 'Warhorn', 'Spear', 'Trident', 'Harpoon Gun'];
+// Infusion types (4 bits, 0-15)
+const INFUSIONS = ['Power', 'Precision', 'Toughness', 'Vitality', 'Condition Damage', 'Expertise', 'Concentration', 'Healing Power', 'Agony Resistance', 'WvW Infusion'];
 
 /**
  * Convert Uint8Array to base64 string efficiently
@@ -85,7 +91,7 @@ export function encodeBuild(build: BuildData): string {
     const bytes: number[] = [];
 
     // Version byte for future compatibility
-    bytes.push(2);
+    bytes.push(3);
 
     // Profession (3 bits) + GameMode (2 bits) = 1 byte
     const profIdx = PROFESSIONS.indexOf(build.profession);
@@ -97,14 +103,40 @@ export function encodeBuild(build: BuildData): string {
     for (const eq of build.equipment) {
       const slotIdx = SLOTS.indexOf(eq.slot);
       bytes.push(slotIdx);
-      writeString(bytes, eq.stat);
-      writeString(bytes, eq.weaponType || '');
-      writeString(bytes, eq.upgrade || '');
+
+      // Use index for stat (fallback to string for unknown stats)
+      const statIdx = STATS.indexOf(eq.stat);
+      if (statIdx >= 0) {
+        bytes.push(statIdx + 1); // +1 so 0 means "use string"
+      } else {
+        bytes.push(0);
+        writeString(bytes, eq.stat);
+      }
+
+      // Use index for weapon type (fallback to string)
+      const weaponIdx = eq.weaponType ? WEAPONS.indexOf(eq.weaponType) : -1;
+      if (weaponIdx >= 0) {
+        bytes.push(weaponIdx + 1);
+      } else {
+        bytes.push(0);
+        writeString(bytes, eq.weaponType || '');
+      }
+
+      // Sigils
       writeVarInt(bytes, eq.sigil1Id || 0);
       writeVarInt(bytes, eq.sigil2Id || 0);
-      writeString(bytes, eq.infusion1 || '');
-      writeString(bytes, eq.infusion2 || '');
-      writeString(bytes, eq.infusion3 || '');
+
+      // Use indices for infusions (fallback to string)
+      for (const infKey of ['infusion1', 'infusion2', 'infusion3'] as const) {
+        const inf = eq[infKey];
+        const infIdx = inf ? INFUSIONS.indexOf(inf) : -1;
+        if (infIdx >= 0) {
+          bytes.push(infIdx + 1);
+        } else {
+          bytes.push(0);
+          writeString(bytes, inf || '');
+        }
+      }
     }
 
     // Skills - write as array of IDs
@@ -165,8 +197,100 @@ export function decodeBuild(encoded: string): BuildData {
     const decompressed = pako.inflate(bytes);
 
     // Check version byte
-    if (decompressed[0] === 2) {
-      // New binary format (version 2)
+    if (decompressed[0] === 3) {
+      // Binary format (version 3) - uses indices for stats/weapons/infusions
+      const offset = { value: 1 };
+
+      // Read profession + game mode
+      const packed = decompressed[offset.value++];
+      const profIdx = (packed >> 2) & 0x07;
+      const modeIdx = packed & 0x03;
+
+      const build: BuildData = {
+        profession: PROFESSIONS[profIdx] as any,
+        gameMode: GAME_MODES[modeIdx] as any,
+        equipment: [],
+        skills: {},
+        traits: {},
+      };
+
+      // Read equipment
+      const eqCount = decompressed[offset.value++];
+      for (let i = 0; i < eqCount; i++) {
+        const slotIdx = decompressed[offset.value++];
+
+        // Read stat (index or string)
+        const statByte = decompressed[offset.value++];
+        const stat = statByte > 0 ? STATS[statByte - 1] : readString(decompressed, offset);
+
+        // Read weapon type (index or string)
+        const weaponByte = decompressed[offset.value++];
+        const weaponType = weaponByte > 0 ? WEAPONS[weaponByte - 1] : readString(decompressed, offset);
+
+        // Read sigils
+        const sigil1Id = readVarInt(decompressed, offset);
+        const sigil2Id = readVarInt(decompressed, offset);
+
+        // Read infusions (index or string)
+        const inf1Byte = decompressed[offset.value++];
+        const infusion1 = inf1Byte > 0 ? INFUSIONS[inf1Byte - 1] : readString(decompressed, offset);
+
+        const inf2Byte = decompressed[offset.value++];
+        const infusion2 = inf2Byte > 0 ? INFUSIONS[inf2Byte - 1] : readString(decompressed, offset);
+
+        const inf3Byte = decompressed[offset.value++];
+        const infusion3 = inf3Byte > 0 ? INFUSIONS[inf3Byte - 1] : readString(decompressed, offset);
+
+        build.equipment.push({
+          slot: SLOTS[slotIdx] as any,
+          stat: stat as any,
+          ...(weaponType && { weaponType: weaponType as any }),
+          ...(sigil1Id && { sigil1Id }),
+          ...(sigil2Id && { sigil2Id }),
+          ...(infusion1 && { infusion1 }),
+          ...(infusion2 && { infusion2 }),
+          ...(infusion3 && { infusion3 }),
+        } as any);
+      }
+
+      // Read skills
+      const skillSlots = ['heal', 'utility1', 'utility2', 'utility3', 'elite'] as const;
+      for (const slot of skillSlots) {
+        const id = readVarInt(decompressed, offset);
+        if (id) build.skills[slot] = id;
+      }
+
+      // Read traits
+      build.traits.spec1 = readVarInt(decompressed, offset) || undefined;
+      build.traits.spec1Choices = [
+        readVarInt(decompressed, offset) || null,
+        readVarInt(decompressed, offset) || null,
+        readVarInt(decompressed, offset) || null,
+      ];
+
+      build.traits.spec2 = readVarInt(decompressed, offset) || undefined;
+      build.traits.spec2Choices = [
+        readVarInt(decompressed, offset) || null,
+        readVarInt(decompressed, offset) || null,
+        readVarInt(decompressed, offset) || null,
+      ];
+
+      build.traits.spec3 = readVarInt(decompressed, offset) || undefined;
+      build.traits.spec3Choices = [
+        readVarInt(decompressed, offset) || null,
+        readVarInt(decompressed, offset) || null,
+        readVarInt(decompressed, offset) || null,
+      ];
+
+      // Read rune and relic
+      const runeId = readVarInt(decompressed, offset);
+      const relicId = readVarInt(decompressed, offset);
+      if (runeId) build.runeId = runeId;
+      if (relicId) build.relicId = relicId;
+
+      return build;
+    } else if (decompressed[0] === 2) {
+      // Binary format (version 2) - uses strings for stats/weapons/infusions (backwards compat)
       const offset = { value: 1 };
 
       // Read profession + game mode
@@ -282,205 +406,21 @@ export function decodeBuild(encoded: string): BuildData {
 }
 
 /**
- * Encode build as human-readable query params
- */
-export async function encodeHumanReadable(build: BuildData): Promise<string> {
-  // Gear: use binary encoding for compactness (FIRST param for readability)
-  const gearData = {
-    e: build.equipment,
-    ...(build.runeId && { r: build.runeId }),
-    ...(build.relicId && { rl: build.relicId }),
-  };
-  const gearJson = JSON.stringify(gearData);
-  const gearCompressed = pako.deflate(gearJson, { level: 9 });
-  const gearB64 = uint8ArrayToBase64(gearCompressed).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-
-  const params = new URLSearchParams();
-  params.set('g', gearB64);
-
-  // Profession: 1-9
-  const profIndex = PROFESSIONS.indexOf(build.profession) + 1;
-  params.set('c', profIndex.toString());
-
-  // Game mode: 0=PvE, 1=PvP, 2=WvW
-  const modeIndex = GAME_MODES.indexOf(build.gameMode);
-  params.set('m', modeIndex.toString());
-
-  // Traits: encode as spec_tbm where t/m/b = top/mid/bot trait choice
-  const traits: string[] = [];
-  const { gw2Api } = await import('./gw2api');
-
-  for (const specNum of [1, 2, 3] as const) {
-    const specIdKey = `spec${specNum}` as const;
-    const choicesKey = `spec${specNum}Choices` as const;
-    const specId = build.traits[specIdKey];
-    const choices = build.traits[choicesKey] || [null, null, null];
-
-    if (specId) {
-      traits.push(specId.toString());
-
-      // Fetch spec data to get trait order
-      const specTraits = await gw2Api.getTraits(specId);
-      const spec = await gw2Api.getSpecialization(specId);
-      const majorTraits = specTraits.filter(t => spec.major_traits.includes(t.id));
-
-      // Get traits organized by tier and order
-      const traitsByTier = [1, 2, 3].map(tier => {
-        const tierTraits = majorTraits.filter(t => t.tier === tier);
-        return tierTraits.sort((a, b) => a.order - b.order);
-      });
-
-      // Encode choices as t/m/b (top/mid/bot)
-      const choiceLetters = choices.map((traitId, tierIndex) => {
-        if (!traitId) return '-';
-        const tierTraits = traitsByTier[tierIndex];
-        const position = tierTraits.findIndex(t => t.id === traitId);
-        return position === 0 ? 't' : position === 1 ? 'm' : position === 2 ? 'b' : '-';
-      }).join('');
-
-      traits.push(choiceLetters);
-    }
-  }
-  if (traits.length) params.set('t', traits.join('_'));
-
-  // Skills: heal_util1_util2_util3_elite
-  const skills = [
-    build.skills.heal,
-    build.skills.utility1,
-    build.skills.utility2,
-    build.skills.utility3,
-    build.skills.elite
-  ].filter(Boolean).join('_');
-  if (skills) params.set('s', skills);
-
-  return params.toString();
-}
-
-/**
- * Decode human-readable query params
- */
-export async function decodeHumanReadable(params: URLSearchParams): Promise<BuildData> {
-  // Profession
-  const profIndex = parseInt(params.get('c') || '1') - 1;
-  const profession = PROFESSIONS[profIndex] as any;
-
-  // Game mode
-  const modeIndex = parseInt(params.get('m') || '0');
-  const gameMode = GAME_MODES[modeIndex] as any;
-
-  // Skills
-  const skillsStr = params.get('s') || '';
-  const skillIds = skillsStr.split('_').filter(Boolean).map(Number);
-  const skills: any = {};
-  if (skillIds[0]) skills.heal = skillIds[0];
-  if (skillIds[1]) skills.utility1 = skillIds[1];
-  if (skillIds[2]) skills.utility2 = skillIds[2];
-  if (skillIds[3]) skills.utility3 = skillIds[3];
-  if (skillIds[4]) skills.elite = skillIds[4];
-
-  // Traits: decode from spec_tbm format
-  const traitsStr = params.get('t') || '';
-  const traitsParts = traitsStr.split('_').filter(Boolean);
-  const traits: any = {};
-  const { gw2Api } = await import('./gw2api');
-
-  // Process traits in pairs: specId, choiceLetters
-  for (let i = 0; i < traitsParts.length; i += 2) {
-    const specId = parseInt(traitsParts[i]);
-    const choiceLetters = traitsParts[i + 1];
-
-    if (specId && choiceLetters) {
-      // Fetch spec data to map positions to trait IDs
-      const specTraits = await gw2Api.getTraits(specId);
-      const spec = await gw2Api.getSpecialization(specId);
-      const majorTraits = specTraits.filter(t => spec.major_traits.includes(t.id));
-
-      // Get traits organized by tier and order
-      const traitsByTier = [1, 2, 3].map(tier => {
-        const tierTraits = majorTraits.filter(t => t.tier === tier);
-        return tierTraits.sort((a, b) => a.order - b.order);
-      });
-
-      // Decode t/m/b letters to trait IDs
-      const choices: (number | null)[] = choiceLetters.split('').map((letter, tierIndex) => {
-        if (letter === '-') return null;
-        const tierTraits = traitsByTier[tierIndex];
-        const position = letter === 't' ? 0 : letter === 'm' ? 1 : letter === 'b' ? 2 : -1;
-        return position >= 0 && tierTraits[position] ? tierTraits[position].id : null;
-      });
-
-      // Assign to appropriate spec slot
-      const specNum = i / 2 + 1;
-      if (specNum === 1) {
-        traits.spec1 = specId;
-        traits.spec1Choices = choices;
-      } else if (specNum === 2) {
-        traits.spec2 = specId;
-        traits.spec2Choices = choices;
-      } else if (specNum === 3) {
-        traits.spec3 = specId;
-        traits.spec3Choices = choices;
-      }
-    }
-  }
-
-  // Gear
-  const gearB64 = (params.get('g') || '').replace(/-/g, '+').replace(/_/g, '/');
-  const padded = gearB64 + '='.repeat((4 - (gearB64.length % 4)) % 4);
-  const binary = atob(padded);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  const decompressed = pako.inflate(bytes, { to: 'string' });
-  const gearData = JSON.parse(decompressed);
-
-  return {
-    profession,
-    gameMode,
-    equipment: gearData.e || [],
-    skills,
-    traits,
-    ...(gearData.r && { runeId: gearData.r }),
-    ...(gearData.rl && { relicId: gearData.rl }),
-  };
-}
-
-export type BuildUrlFormat = 'compressed' | 'readable';
-
-/**
  * Get shareable URL for current build
  */
-export async function getShareableUrl(build: BuildData, format: BuildUrlFormat = 'compressed'): Promise<string> {
+export function getShareableUrl(build: BuildData): string {
   const url = new URL(window.location.href);
-
-  if (format === 'readable') {
-    // Clear old params and set new ones
-    url.search = '';
-    const encoded = await encodeHumanReadable(build);
-    url.search = encoded;
-  } else {
-    // Compressed format
-    const encoded = encodeBuild(build);
-    url.searchParams.set('build', encoded);
-  }
-
+  const encoded = encodeBuild(build);
+  url.searchParams.set('build', encoded);
   return url.toString();
 }
 
 /**
  * Load build from URL if present
  */
-export async function loadBuildFromUrl(): Promise<BuildData | null> {
+export function loadBuildFromUrl(): BuildData | null {
   try {
     const params = new URLSearchParams(window.location.search);
-
-    // Check for human-readable format (has 'c' param instead of 'build')
-    if (params.has('c')) {
-      return await decodeHumanReadable(params);
-    }
-
-    // Check for compressed format
     const buildParam = params.get('build');
     if (buildParam) {
       return decodeBuild(buildParam);
