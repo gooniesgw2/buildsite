@@ -226,7 +226,7 @@ Exclude (conditional/stacking):
 - Vitality → derives Health
 
 **Formula for derived %:**
-- Crit Chance % = 4 + (Precision - 1000) / 21
+- Crit Chance % = **5** + (Precision - 1000) / 21 (base is 5%, not 4%)
 - Crit Damage % = 150 + Ferocity / 15
 - Condition Duration % = Expertise / 15
 - **Boon Duration % = Concentration / 15**

@@ -390,11 +390,17 @@ function calculateEquipmentStats(equipment: Equipment[]): Partial<BaseAttributes
 /**
  * Calculate infusion bonuses from equipment
  * Each infusion gives +5 to a specific stat
+ * Excludes Weapon Set 2 (MainHand2/OffHand2)
  */
 function calculateInfusionStats(equipment: Equipment[]): Partial<BaseAttributes> {
   const stats = createEmptyAttributes();
 
   equipment.forEach((item) => {
+    // Skip Weapon Set 2 (consistent with equipment stat calculation)
+    if (item.slot === 'MainHand2' || item.slot === 'OffHand2') {
+      return;
+    }
+
     // Check all infusion slots
     (['infusion1', 'infusion2', 'infusion3'] as const).forEach((key) => {
       const infusionId = item[key];
@@ -508,8 +514,8 @@ function calculateDerivedStats(
     armor += SHIELD_ARMOR_BONUS;
   }
 
-  // Crit Chance = 4% + (Precision - 1000) / 21 + direct bonuses (capped at 0-100%)
-  const baseCritChance = 4 + (attributes.Precision - 1000) / 21;
+  // Crit Chance = 5% + (Precision - 1000) / 21 + direct bonuses (capped at 0-100%)
+  const baseCritChance = 5 + (attributes.Precision - 1000) / 21;
   const critChance = Math.min(100, Math.max(0, baseCritChance + (percentageBonuses.critChance || 0)));
 
   // Crit Damage = 150% + Ferocity / 15 + direct bonuses
@@ -581,7 +587,7 @@ export function calculateStats(
       derived: {
         health: 0,
         armor: 0,
-        critChance: 4,
+        critChance: 5,
         critDamage: 150,
         effectivePower: 1000,
         conditionDuration: 0,
